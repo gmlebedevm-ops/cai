@@ -148,7 +148,10 @@ export async function POST(request: NextRequest) {
       amount,
       startDate,
       endDate,
-      description
+      description,
+      status = 'DRAFT',
+      workflowId,
+      initiatorId
     } = body
 
     // Validate required fields
@@ -159,8 +162,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get or create demo user
-    const user = await getOrCreateDemoUser()
+    // Get or create demo user if initiatorId not provided
+    let user
+    if (initiatorId) {
+      user = await db.user.findUnique({
+        where: { id: initiatorId }
+      })
+    } else {
+      user = await getOrCreateDemoUser()
+    }
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      )
+    }
 
     const contract = await db.contract.create({
       data: {
@@ -170,7 +187,8 @@ export async function POST(request: NextRequest) {
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         initiatorId: user.id,
-        status: 'DRAFT'
+        status,
+        workflowId
       },
       include: {
         initiator: {
@@ -180,6 +198,13 @@ export async function POST(request: NextRequest) {
             name: true,
             role: true
           }
+        },
+        workflow: {
+          select: {
+            id: true,
+            name: true,
+            status: true
+          }
         }
       }
     })
@@ -187,14 +212,16 @@ export async function POST(request: NextRequest) {
     // Create contract history entry
     await db.contractHistory.create({
       data: {
-        action: 'CREATED',
+        action: status === 'DRAFT' ? 'CREATED_DRAFT' : 'CREATED_AND_SUBMITTED',
         details: JSON.stringify({
           number,
           counterparty,
           amount,
           startDate,
           endDate,
-          description
+          description,
+          status,
+          workflowId
         }),
         contractId: contract.id
       }

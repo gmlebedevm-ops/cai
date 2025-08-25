@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -30,10 +30,18 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import { CalendarIcon, Upload } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { CalendarIcon, Upload, Send, Save } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { ContractStatus } from '@/types/contract'
+import { useToast } from '@/hooks/use-toast'
 
 const formSchema = z.object({
   number: z.string().min(1, 'Номер договора обязателен'),
@@ -46,9 +54,18 @@ const formSchema = z.object({
     required_error: 'Дата окончания обязательна',
   }),
   description: z.string().optional(),
+  workflowId: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof formSchema>
+
+interface Workflow {
+  id: string
+  name: string
+  description?: string
+  status: string
+  isDefault: boolean
+}
 
 interface CreateContractDialogProps {
   open: boolean
@@ -59,6 +76,9 @@ interface CreateContractDialogProps {
 export function CreateContractDialog({ open, onOpenChange, onSuccess }: CreateContractDialogProps) {
   const [loading, setLoading] = useState(false)
   const [files, setFiles] = useState<File[]>([])
+  const [workflows, setWorkflows] = useState<Workflow[]>([])
+  const [loadingWorkflows, setLoadingWorkflows] = useState(false)
+  const { toast } = useToast()
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -67,39 +87,118 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess }: CreateCo
       counterparty: '',
       amount: '',
       description: '',
+      workflowId: '',
     },
   })
 
-  const onSubmit = async (values: FormValues) => {
+  // Загрузка активных workflow при открытии диалога
+  useEffect(() => {
+    if (open) {
+      fetchWorkflows()
+    }
+  }, [open])
+
+  const fetchWorkflows = async () => {
+    setLoadingWorkflows(true)
+    try {
+      const response = await fetch('/api/workflows?status=ACTIVE')
+      if (response.ok) {
+        const data = await response.json()
+        setWorkflows(data)
+        
+        // Автоматически выбрать workflow по умолчанию
+        const defaultWorkflow = data.find((w: Workflow) => w.isDefault)
+        if (defaultWorkflow) {
+          form.setValue('workflowId', defaultWorkflow.id)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching workflows:', error)
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось загрузить маршруты согласования',
+        variant: 'destructive',
+      })
+    } finally {
+      setLoadingWorkflows(false)
+    }
+  }
+
+  const onSubmit = async (values: FormValues, action: 'draft' | 'submit') => {
     setLoading(true)
     try {
       // Для демо используем фиксированный ID пользователя
       const initiatorId = 'demo-user-id'
+
+      const contractData = {
+        ...values,
+        initiatorId,
+        amount: parseFloat(values.amount),
+        status: action === 'draft' ? 'DRAFT' : 'IN_REVIEW',
+        workflowId: values.workflowId || null,
+      }
 
       const response = await fetch('/api/contracts', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...values,
-          initiatorId,
-          amount: parseFloat(values.amount),
-        }),
+        body: JSON.stringify(contractData),
       })
 
       if (response.ok) {
+        const contract = await response.json()
+        
+        // Если отправляем на согласование и есть workflow, запускаем процесс
+        if (action === 'submit' && values.workflowId) {
+          await startApprovalProcess(contract.id, values.workflowId)
+        }
+
         form.reset()
         setFiles([])
         onOpenChange(false)
         onSuccess?.()
+        
+        toast({
+          title: 'Успешно',
+          description: action === 'draft' 
+            ? 'Договор сохранен в черновики' 
+            : 'Договор создан и отправлен на согласование',
+        })
       } else {
         throw new Error('Failed to create contract')
       }
     } catch (error) {
       console.error('Error creating contract:', error)
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось создать договор',
+        variant: 'destructive',
+      })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const startApprovalProcess = async (contractId: string, workflowId: string) => {
+    try {
+      const response = await fetch('/api/contracts/start-approval', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contractId,
+          workflowId,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to start approval process')
+      }
+    } catch (error) {
+      console.error('Error starting approval process:', error)
+      throw error
     }
   }
 
@@ -282,6 +381,41 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess }: CreateCo
               )}
             />
 
+            <FormField
+              control={form.control}
+              name="workflowId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Маршрут согласования</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Выберите маршрут согласования" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {loadingWorkflows ? (
+                        <SelectItem value="loading" disabled>
+                          Загрузка...
+                        </SelectItem>
+                      ) : workflows.length === 0 ? (
+                        <SelectItem value="none" disabled>
+                          Нет активных маршрутов
+                        </SelectItem>
+                      ) : (
+                        workflows.map((workflow) => (
+                          <SelectItem key={workflow.id} value={workflow.id}>
+                            {workflow.name} {workflow.isDefault && '(по умолчанию)'}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="space-y-2">
               <FormLabel>Документы</FormLabel>
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
@@ -334,17 +468,34 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess }: CreateCo
               )}
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="flex flex-col sm:flex-row gap-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
                 disabled={loading}
+                className="order-1 sm:order-1"
               >
                 Отмена
               </Button>
-              <Button type="submit" disabled={loading}>
-                {loading ? 'Создание...' : 'Создать договор'}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => form.handleSubmit((values) => onSubmit(values, 'draft'))()}
+                disabled={loading}
+                className="order-3 sm:order-2"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                {loading ? 'Сохранение...' : 'Сохранить в черновики'}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => form.handleSubmit((values) => onSubmit(values, 'submit'))()}
+                disabled={loading || !form.watch('workflowId')}
+                className="order-2 sm:order-3"
+              >
+                <Send className="h-4 w-4 mr-2" />
+                {loading ? 'Отправка...' : 'Отправить на согласование'}
               </Button>
             </DialogFooter>
           </form>
