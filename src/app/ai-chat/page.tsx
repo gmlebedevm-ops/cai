@@ -1,21 +1,17 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback, memo } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Label } from '@/components/ui/label'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 import { 
   Send, 
   Bot, 
   User, 
   Loader2, 
-  RefreshCw, 
   Settings,
   Maximize2,
   Minimize2,
@@ -33,7 +29,12 @@ import {
   FileWarning,
   Search,
   Bell,
-  History
+  History,
+  MessageSquare,
+  Sparkles,
+  Zap,
+  FileEdit,
+  SquarePen
 } from 'lucide-react'
 
 interface ChatMessage {
@@ -61,7 +62,7 @@ interface Contract {
   createdAt: string
 }
 
-interface Scenario {
+interface QuickAction {
   id: string
   title: string
   description: string
@@ -70,162 +71,40 @@ interface Scenario {
   category: string
 }
 
-const predefinedScenarios: Scenario[] = [
+const quickActions: QuickAction[] = [
   {
     id: 'risk-analysis',
     title: 'Анализ рисков',
-    description: 'Сравнение с эталоном и выявление рисков',
+    description: 'Проверка договора на рисковые положения',
     icon: FileWarning,
-    prompt: 'Проанализируй предоставленный текст договора.',
+    prompt: 'Проанализируй договор на наличие рисковых положений и предложи рекомендации по их улучшению.',
     category: 'analysis'
   },
   {
     id: 'contract-card',
-    title: 'Создание карточки договора',
-    description: 'Автоматическое извлечение данных и проверка',
+    title: 'Карточка договора',
+    description: 'Автоматическое извлечение ключевых данных',
     icon: FileText,
-    prompt: 'Проанализируй предоставленный текст договора.',
-    category: 'creation'
+    prompt: 'Извлеки из текста договора ключевую информацию: номер, стороны, сумму, сроки, предмет договора.',
+    category: 'extraction'
+  },
+  {
+    id: 'clause-check',
+    title: 'Проверка условий',
+    description: 'Анализ соответствия стандартным условиям',
+    icon: CheckCircle,
+    prompt: 'Проверь соответствие условий договора стандартным требованиям компании.',
+    category: 'verification'
+  },
+  {
+    id: 'document-gen',
+    title: 'Генерация документов',
+    description: 'Создание сопроводительных документов',
+    icon: Sparkles,
+    prompt: 'Сгенерируй служебную записку на основе предоставленной информации.',
+    category: 'generation'
   }
 ]
-
-// Мемоизированный компонент для сообщения
-const MessageComponent = memo(({ 
-  message, 
-  onCopy 
-}: { 
-  message: ChatMessage; 
-  onCopy: (text: string) => void;
-}) => {
-  return (
-    <div
-      className={"flex gap-3 " + (
-        message.role === 'user' ? 'justify-end' : 'justify-start'
-      )}
-    >
-      {message.role === 'assistant' && (
-        <div className="flex-shrink-0">
-          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-            <Bot className="h-4 w-4 text-primary" />
-          </div>
-        </div>
-      )}
-      
-      <div className={"max-w-[80%] " + (
-        message.role === 'user' 
-          ? 'bg-primary text-primary-foreground' 
-          : 'bg-muted'
-      ) + " rounded-lg p-3"}>
-        {message.isLoading ? (
-          <div className="flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm">AI думает...</span>
-          </div>
-        ) : message.error ? (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-red-500">
-              <AlertCircle className="h-4 w-4" />
-              <span className="text-sm font-medium">Ошибка</span>
-            </div>
-            <p className="text-sm">{message.error}</p>
-          </div>
-        ) : (
-          <div className="whitespace-pre-wrap">{message.content}</div>
-        )}
-        
-        <div className="flex items-center gap-2 mt-1">
-          <span className="text-xs opacity-70">
-            {message.timestamp.toLocaleTimeString('ru-RU', { 
-              hour: '2-digit', 
-              minute: '2-digit' 
-            })}
-          </span>
-          {message.role === 'assistant' && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-5 w-5 p-0"
-              onClick={() => onCopy(message.content)}
-            >
-              <Copy className="h-3 w-3" />
-            </Button>
-          )}
-        </div>
-      </div>
-      
-      {message.role === 'user' && (
-        <div className="flex-shrink-0">
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-            <User className="h-4 w-4 text-primary-foreground" />
-          </div>
-        </div>
-      )}
-    </div>
-  )
-})
-
-MessageComponent.displayName = 'MessageComponent'
-
-// Мемоизированный компонент для поля ввода
-const InputComponent = memo(({ 
-  inputMessage, 
-  setInputMessage, 
-  onSend, 
-  isLoading, 
-  isActive 
-}: { 
-  inputMessage: string;
-  setInputMessage: (value: string) => void;
-  onSend: () => void;
-  isLoading: boolean;
-  isActive: boolean;
-}) => {
-  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      onSend()
-    }
-  }, [onSend])
-
-  return (
-    <div className="border-t bg-card p-2 flex-shrink-0">
-      <div className="flex gap-2">
-        <Input
-          value={inputMessage}
-          onChange={(e) => setInputMessage(e.target.value)}
-          onKeyPress={handleKeyPress}
-          placeholder="Введите сообщение..."
-          disabled={isLoading || !isActive}
-          className="flex-1"
-        />
-        <Button 
-          onClick={onSend}
-          disabled={isLoading || !inputMessage.trim() || !isActive}
-          size="sm"
-        >
-          {isLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Send className="h-4 w-4" />
-          )}
-        </Button>
-      </div>
-      <div className="flex items-center justify-between mt-2">
-        <div className="text-xs text-muted-foreground">
-          Нажмите Enter для отправки, Shift+Enter для новой строки
-        </div>
-        {!isActive && (
-          <div className="flex items-center gap-2 text-xs text-orange-600">
-            <AlertCircle className="h-3 w-3" />
-            <span>AI-ассистент отключен</span>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-})
-
-InputComponent.displayName = 'InputComponent'
 
 export default function AIChatPage() {
   const [sessions, setSessions] = useState<ChatSession[]>([])
@@ -245,12 +124,12 @@ export default function AIChatPage() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [editedTitle, setEditedTitle] = useState('')
-  const [activeTab, setActiveTab] = useState('chat')
-  const [selectedScenario, setSelectedScenario] = useState<string>('')
   const [copiedMessage, setCopiedMessage] = useState<string>('')
+  const [showQuickActions, setShowQuickActions] = useState(true)
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     loadSessions()
@@ -269,6 +148,12 @@ export default function AIChatPage() {
       setContractData(null)
     }
   }, [selectedContractId])
+
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, 100)
+  }
 
   const loadSessions = async () => {
     setIsLoadingHistory(true)
@@ -397,19 +282,6 @@ export default function AIChatPage() {
     setEditedTitle('')
   }
 
-  const handleScenarioSelect = (scenarioId: string) => {
-    const scenario = predefinedScenarios.find(s => s.id === scenarioId)
-    if (scenario) {
-      setSelectedScenario(scenarioId)
-      setInputMessage(scenario.prompt)
-      setActiveTab('chat')
-    }
-  }
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
-
   const createNewSession = () => {
     const newSession: ChatSession = {
       id: Date.now().toString(),
@@ -420,6 +292,7 @@ export default function AIChatPage() {
     }
     setSessions(prev => [newSession, ...prev])
     setCurrentSession(newSession)
+    setShowQuickActions(true)
   }
 
   const deleteSession = async (sessionId: string, event: React.MouseEvent) => {
@@ -440,6 +313,14 @@ export default function AIChatPage() {
     }
   }
 
+  const handleQuickAction = (action: QuickAction) => {
+    setInputMessage(action.prompt)
+    setShowQuickActions(false)
+    setTimeout(() => {
+      inputRef.current?.focus()
+    }, 100)
+  }
+
   const sendMessage = useCallback(async () => {
     if (!inputMessage.trim() || !currentSession || isLoading || !aiSettings.isActive) return
 
@@ -458,14 +339,12 @@ export default function AIChatPage() {
       isLoading: true
     }
 
-    // Обновляем состояние за один раз
     const updatedSession = {
       ...currentSession,
       lastMessage: new Date(),
       messages: [...currentSession.messages, userMessage, assistantMessage]
     }
 
-    // Batch обновления состояния
     setInputMessage('')
     setIsLoading(true)
     setCurrentSession(updatedSession)
@@ -514,7 +393,7 @@ export default function AIChatPage() {
         const contractId = selectedContractId || 'default'
         const userId = 'current-user'
         
-        // Сохраняем историю параллельно, не дожидаясь завершения
+        // Сохраняем историю параллельно
         Promise.all([
           fetch('/api/ai-assistant/history', {
             method: 'POST',
@@ -540,7 +419,6 @@ export default function AIChatPage() {
           console.error('Error saving chat history:', historyError)
         })
 
-        // Финальное обновление состояния
         const finalMessages = updatedSession.messages.map(msg => 
           msg.id === assistantMessage.id 
             ? { ...msg, content: data.message?.content || data.response || '', isLoading: false }
@@ -658,10 +536,9 @@ export default function AIChatPage() {
   }
 
   return (
-    <div className={"flex h-full bg-background overflow-hidden " + (isFullscreen ? 'fixed inset-0 z-50' : '')}>
-      {/* Боковая панель со списком сессий */}
-      <div className={(isSidebarCollapsed ? 'w-0 border-r-0' : 'w-80 border-r') + " bg-card flex flex-col transition-all duration-300 overflow-hidden flex-shrink-0"}>
-        {/* Заголовок боковой панели с кнопкой сворачивания */}
+    <div className={`flex h-full bg-background overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}>
+      {/* Боковая панель */}
+      <div className={`${isSidebarCollapsed ? 'w-0 border-r-0' : 'w-80 border-r'} bg-card flex flex-col transition-all duration-300 overflow-hidden flex-shrink-0`}>
         <div className="p-3 border-b bg-card flex items-center justify-between">
           {!isSidebarCollapsed && (
             <h2 className="text-lg font-semibold">Чат с AI</h2>
@@ -688,23 +565,22 @@ export default function AIChatPage() {
                   <Database className="h-4 w-4" />
                 </Button>
               </div>
-              <Select value={selectedContractId || 'no-contract'} onValueChange={handleContractChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Выберите договор" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="no-contract">Без договора</SelectItem>
-                  {contracts.map((contract) => (
-                    <SelectItem key={contract.id} value={contract.id}>
-                      {contract.number} - {contract.counterparty}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select 
+                value={selectedContractId || 'no-contract'} 
+                onChange={(e) => handleContractChange(e.target.value)}
+                className="w-full p-2 border rounded-md bg-background text-sm"
+              >
+                <option value="no-contract">Без договора</option>
+                {contracts.map((contract) => (
+                  <option key={contract.id} value={contract.id}>
+                    {contract.number} - {contract.counterparty}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {/* Список сессий */}
-            <div className="flex-1 overflow-hidden">
+            {/* Список сессий - скроллируемая область */}
+            <div className="flex-1 overflow-y-auto">
               <div className="p-2 space-y-1">
                 {isLoadingHistory ? (
                   <div className="flex items-center justify-center h-full">
@@ -718,11 +594,11 @@ export default function AIChatPage() {
                   sessions.map((session) => (
                     <div
                       key={session.id}
-                      className={"p-3 rounded-lg cursor-pointer transition-colors " + (
+                      className={`p-3 rounded-lg cursor-pointer transition-colors ${
                         currentSession?.id === session.id 
                           ? 'bg-primary text-primary-foreground' 
                           : 'hover:bg-muted'
-                      )}
+                      }`}
                       onClick={() => setCurrentSession(session)}
                     >
                       <div className="flex items-center justify-between">
@@ -747,14 +623,14 @@ export default function AIChatPage() {
               </div>
             </div>
 
-            {/* Кнопка создания нового чата */}
-            <div className="p-3 border-t">
+            {/* Кнопка создания нового чата - зафиксирована внизу */}
+            <div className="p-3 border-t bg-card flex-shrink-0">
               <Button 
                 onClick={createNewSession}
                 className="w-full"
                 variant="outline"
               >
-                <RefreshCw className="h-4 w-4 mr-2" />
+                <SquarePen className="h-4 w-4 mr-2" />
                 Новый чат
               </Button>
             </div>
@@ -766,7 +642,7 @@ export default function AIChatPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {currentSession ? (
           <>
-            {/* Заголовок чата - фиксированный */}
+            {/* Заголовок чата */}
             <div className="p-3 border-b bg-card flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-3">
                 {isSidebarCollapsed && (
@@ -808,7 +684,7 @@ export default function AIChatPage() {
               </div>
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="sm" onClick={createNewSession}>
-                  <RefreshCw className="h-4 w-4" />
+                  <SquarePen className="h-4 w-4" />
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => setIsFullscreen(!isFullscreen)}>
                   {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
@@ -816,145 +692,165 @@ export default function AIChatPage() {
               </div>
             </div>
 
-            {/* Скроллируемая область с вкладками */}
-            <div className="flex-1 flex flex-col overflow-hidden">
-              {/* Вкладки */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col" key="main-tabs" style={{ contain: 'layout' }}>
-              <TabsList className="grid w-full grid-cols-3" key="tabs-list" style={{ contain: 'layout' }}>
-                <TabsTrigger value="chat" key="chat-trigger" style={{ contain: 'layout' }}>Чат</TabsTrigger>
-                <TabsTrigger value="scenarios" key="scenarios-trigger" style={{ contain: 'layout' }}>Сценарии</TabsTrigger>
-                <TabsTrigger value="history" key="history-trigger" style={{ contain: 'layout' }}>История</TabsTrigger>
-              </TabsList>
-
-              {/* Вкладка чата */}
-              <TabsContent value="chat" className="flex-1 flex flex-col m-0 p-0" key="chat-content" style={{ contain: 'layout' }}>
-                <div className="flex-1 overflow-y-auto" key="chat-messages-container" style={{ contain: 'layout' }}>
-                  <div className="space-y-4 w-full px-2 py-2" key="chat-messages" style={{ contain: 'layout' }}>
-                    {currentSession.messages.length === 0 ? (
-                      <div className="text-center py-8">
+            {/* Область сообщений */}
+            <div className="flex-1 overflow-hidden flex flex-col">
+              <div className="flex-1 overflow-y-auto" ref={scrollAreaRef}>
+                <div className="p-4 space-y-4">
+                  {currentSession.messages.length === 0 && showQuickActions && (
+                    <div className="space-y-4">
+                      <div className="text-center py-4">
                         <Bot className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                         <h3 className="text-lg font-medium mb-2">
-                          Начните диалог
+                          Чем я могу вам помочь?
                         </h3>
-                        <p className="text-muted-foreground">
-                          Задайте вопрос AI-ассистенту или выберите сценарий
+                        <p className="text-muted-foreground mb-6">
+                          Выберите действие или задайте свой вопрос
                         </p>
                       </div>
-                    ) : (
-                      currentSession.messages.map((message) => (
-                        <MessageComponent 
-                          key={message.id} 
-                          message={message} 
-                          onCopy={copyToClipboard}
-                        />
-                      ))
-                    )}
-                  </div>
-                  <div ref={messagesEndRef} />
-                </div>
-                
-                {/* Поле ввода */}
-                <InputComponent 
-                  inputMessage={inputMessage}
-                  setInputMessage={setInputMessage}
-                  onSend={sendMessage}
-                  isLoading={isLoading}
-                  isActive={aiSettings.isActive}
-                />
-              </TabsContent>
-
-              {/* Вкладка сценариев */}
-              <TabsContent value="scenarios" className="flex-1 m-0 overflow-hidden" key="scenarios-content">
-                <div className="flex-1 overflow-y-auto p-2" key="scenarios-container">
-                  <h3 className="text-lg font-semibold mb-4" key="scenarios-title">Предустановленные сценарии</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4" key="scenarios-grid">
-                    {predefinedScenarios.map((scenario) => (
-                      <Card 
-                        key={scenario.id}
-                        className={"cursor-pointer transition-colors hover:bg-muted/50 " + (
-                          selectedScenario === scenario.id ? 'ring-2 ring-primary' : ''
-                        )}
-                        onClick={() => handleScenarioSelect(scenario.id)}
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex items-start gap-3">
-                            <div className="flex-shrink-0">
-                              <scenario.icon className="h-6 w-6 text-primary" />
-                            </div>
-                            <div className="flex-1">
-                              <h4 className="font-medium mb-1">{scenario.title}</h4>
-                              <p className="text-sm text-muted-foreground">{scenario.description}</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              </TabsContent>
-
-              {/* Вкладка истории */}
-              <TabsContent value="history" className="flex-1 m-0 overflow-hidden" key="history-content">
-                <div className="flex-1 overflow-y-auto p-2" key="history-container">
-                  <h3 className="text-lg font-semibold mb-4" key="history-title">История чатов</h3>
-                  <div className="space-y-3" key="history-list">
-                    {sessions.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <History className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                        <p>Нет истории чатов</p>
-                      </div>
-                    ) : (
-                      sessions.map((session) => (
-                        <Card 
-                          key={session.id}
-                          className={"cursor-pointer transition-colors " + (
-                            currentSession?.id === session.id ? 'ring-2 ring-primary' : 'hover:bg-muted/50'
-                          )}
-                          onClick={() => setCurrentSession(session)}
-                        >
-                          <CardContent className="p-3">
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <h4 className="font-medium">{session.title}</h4>
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                  <span>{formatDate(session.createdAt)}</span>
-                                  <span>•</span>
-                                  <span>{session.messages.length} сообщений</span>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {quickActions.map((action) => (
+                          <Card 
+                            key={action.id} 
+                            className="cursor-pointer hover:shadow-md transition-shadow"
+                            onClick={() => handleQuickAction(action)}
+                          >
+                            <CardContent className="p-4">
+                              <div className="flex items-start gap-3">
+                                <div className="flex-shrink-0">
+                                  <action.icon className="h-5 w-5 text-primary" />
+                                </div>
+                                <div className="flex-1">
+                                  <h4 className="font-medium text-sm">{action.title}</h4>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {action.description}
+                                  </p>
                                 </div>
                               </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                                onClick={(e) => deleteSession(session.id, e)}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {currentSession.messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={`flex gap-3 ${
+                        message.role === 'user' ? 'justify-end' : 'justify-start'
+                      }`}
+                    >
+                      {message.role === 'assistant' && (
+                        <div className="flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <Bot className="h-4 w-4 text-primary" />
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className={`max-w-[80%] ${
+                        message.role === 'user' 
+                          ? 'bg-primary text-primary-foreground' 
+                          : 'bg-muted'
+                      } rounded-lg p-3`}>
+                        {message.isLoading ? (
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span className="text-sm">AI думает...</span>
+                          </div>
+                        ) : message.error ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-red-500">
+                              <AlertCircle className="h-4 w-4" />
+                              <span className="text-sm font-medium">Ошибка</span>
                             </div>
-                          </CardContent>
-                        </Card>
-                      ))
-                    )}
-                  </div>
+                            <p className="text-sm">{message.error}</p>
+                          </div>
+                        ) : (
+                          <div className="whitespace-pre-wrap">{message.content}</div>
+                        )}
+                        
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs opacity-70">
+                            {formatTime(message.timestamp)}
+                          </span>
+                          {message.role === 'assistant' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 w-5 p-0"
+                              onClick={() => copyToClipboard(message.content)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {message.role === 'user' && (
+                        <div className="flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                            <User className="h-4 w-4 text-primary-foreground" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  
+                  <div ref={messagesEndRef} />
                 </div>
-              </TabsContent>
-            </Tabs>
+              </div>
+
+              {/* Область ввода */}
+              <div className="border-t bg-card p-4 flex-shrink-0">
+                <div className="flex gap-2">
+                  <Input
+                    ref={inputRef}
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="Введите сообщение..."
+                    disabled={isLoading || !aiSettings.isActive}
+                    className="flex-1"
+                  />
+                  <Button 
+                    onClick={sendMessage}
+                    disabled={isLoading || !inputMessage.trim() || !aiSettings.isActive}
+                    size="sm"
+                  >
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between mt-2">
+                  <div className="text-xs text-muted-foreground">
+                    Нажмите Enter для отправки, Shift+Enter для новой строки
+                  </div>
+                  {copiedMessage && (
+                    <div className="flex items-center gap-1 text-xs text-green-600">
+                      <CheckCircle className="h-3 w-3" />
+                      <span>Скопировано</span>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </>
         ) : (
-          <div className="flex items-center justify-center flex-1">
+          <div className="flex items-center justify-center h-full">
             <div className="text-center space-y-4">
-              <Bot className="h-12 w-12 text-muted-foreground mx-auto" />
+              <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto" />
               <div>
-                <h3 className="text-lg font-medium mb-2">
-                  Выберите или создайте чат
-                </h3>
-                <p className="text-muted-foreground">
-                  Начните новый диалог или выберите существующий из списка
-                </p>
+                <h3 className="text-lg font-medium">Выберите или создайте чат</h3>
+                <p className="text-muted-foreground">Начните новый диалог или выберите существующий</p>
               </div>
               <Button onClick={createNewSession}>
-                Создать новый чат
+                <SquarePen className="h-4 w-4 mr-2" />
+                Новый чат
               </Button>
             </div>
           </div>

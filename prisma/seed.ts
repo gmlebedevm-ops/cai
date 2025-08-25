@@ -40,6 +40,11 @@ async function main() {
       email: 'office@test.com',
       name: 'Елена Еленова',
       role: UserRole.OFFICE_MANAGER
+    },
+    {
+      email: 'admin@test.com',
+      name: 'Администратор',
+      role: UserRole.ADMINISTRATOR
     }
   ]
 
