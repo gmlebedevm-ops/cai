@@ -19,6 +19,10 @@ import {
   Building2,
   Contact,
   UserCheck,
+  FileUser,
+  BookText,
+  Waypoints,
+  Blocks,
   Calendar,
   MessageSquare,
   ChevronDown,
@@ -60,7 +64,7 @@ const navigation = [
     description: 'Все договоры',
     children: [
       { name: 'Все договоры', href: '/contracts', icon: FileText },
-      { name: 'Мои договоры', href: '/contracts/my', icon: UserCheck },
+      { name: 'Мои договоры', href: '/contracts/my', icon: FileUser },
       { name: 'На согласовании', href: '/contracts/review', icon: Clock },
       { name: 'Требуют внимания', href: '/contracts/pending', icon: AlertTriangle },
       { name: 'Архив', href: '/contracts/archive', icon: Archive },
@@ -125,9 +129,9 @@ const navigation = [
     description: 'Администрирование системы',
     children: [
       { name: 'Настройки AI', href: '/admin/ai-settings', icon: Bot },
-      { name: 'Маршруты согласования', href: '/admin/workflows', icon: CheckSquare },
-      { name: 'Справочники', href: '/admin/references', icon: FolderOpen },
-      { name: 'Интеграции', href: '/admin/integrations', icon: Settings },
+      { name: 'Маршруты согласования', href: '/admin/workflows', icon: Waypoints },
+      { name: 'Справочники', href: '/admin/references', icon: BookText },
+      { name: 'Интеграции', href: '/admin/integrations', icon: Blocks },
     ]
   },
 ]

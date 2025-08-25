@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status')
     const counterparty = searchParams.get('counterparty')
     const search = searchParams.get('search')
+    const initiatorId = searchParams.get('initiatorId')
     
     // Sort parameters
     const sortBy = searchParams.get('sortBy') || 'updatedAt'
@@ -49,6 +50,11 @@ export async function GET(request: NextRequest) {
     // Counterparty filter
     if (counterparty && counterparty !== 'all') {
       whereClause.counterparty = counterparty
+    }
+    
+    // Initiator filter (for "My Contracts" page)
+    if (initiatorId) {
+      whereClause.initiatorId = initiatorId
     }
     
     // Search filter (by number or counterparty)
