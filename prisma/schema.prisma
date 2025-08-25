@@ -1,0 +1,404 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  INITIATOR
+  INITIATOR_MANAGER
+  DEPARTMENT_HEAD
+  CHIEF_LAWYER
+  GENERAL_DIRECTOR
+  OFFICE_MANAGER
+  ADMINISTRATOR
+}
+
+enum ContractStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  SIGNED
+  ARCHIVED
+  REJECTED
+}
+
+enum DocumentType {
+  CONTRACT
+  TENDER_SHEET
+  COMMERCIAL_PROPOSAL
+  DISAGREEMENT_PROTOCOL
+  OTHER
+}
+
+enum NotificationType {
+  CONTRACT_CREATED
+  CONTRACT_UPDATED
+  APPROVAL_REQUESTED
+  APPROVED
+  REJECTED
+  COMMENT_ADDED
+  DOCUMENT_UPLOADED
+  DEADLINE_APPROACHING
+  CONTRACT_SIGNED
+  WORKFLOW_UPDATED
+  REFERENCE_UPDATED
+}
+
+enum WorkflowStatus {
+  ACTIVE
+  INACTIVE
+  DRAFT
+}
+
+enum WorkflowStepType {
+  APPROVAL
+  REVIEW
+  NOTIFICATION
+  CONDITION
+}
+
+enum ReferenceType {
+  COUNTERPARTY
+  CONTRACT_TYPE
+  DEPARTMENT
+  POSITION
+  DOCUMENT_CATEGORY
+  APPROVAL_REASON
+  REJECTION_REASON
+}
+
+enum PermissionType {
+  // Управление договорами
+  CREATE_CONTRACT
+  VIEW_CONTRACT
+  EDIT_CONTRACT
+  DELETE_CONTRACT
+  APPROVE_CONTRACT
+  REJECT_CONTRACT
+  
+  // Управление документами
+  UPLOAD_DOCUMENT
+  VIEW_DOCUMENT
+  DELETE_DOCUMENT
+  
+  // Управление пользователями
+  CREATE_USER
+  VIEW_USER
+  EDIT_USER
+  DELETE_USER
+  
+  // Управление ролями и правами
+  MANAGE_ROLES
+  MANAGE_PERMISSIONS
+  
+  // Управление настройками
+  MANAGE_WORKFLOWS
+  MANAGE_REFERENCES
+  MANAGE_INTEGRATIONS
+  
+  // Управление структурой компании
+  MANAGE_DEPARTMENTS
+  
+  // Системные права
+  VIEW_REPORTS
+  MANAGE_SYSTEM
+  VIEW_ALL_CONTRACTS
+  VIEW_ALL_USERS
+}
+
+model Permission {
+  id          String         @id @default(cuid())
+  type        PermissionType
+  name        String
+  description String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  
+  // Relations
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  id           String      @id @default(cuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime    @default(now())
+  
+  // Relations
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  
+  @@unique([roleId, permissionId])
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  permissions RolePermission[]
+  users       User[]
+}
+
+model Department {
+  id            String   @id @default(cuid())
+  name          String
+  parentId      String?
+  level         Int      @default(0)
+  path          String
+  childrenCount Int      @default(0)
+  description   String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  parent        Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id])
+  children      Department[] @relation("DepartmentHierarchy")
+  users         User[]
+  
+  @@unique([name, parentId])
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      UserRole @default(INITIATOR)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  contracts     Contract[]
+  comments      Comment[]
+  approvals     Approval[]
+  documentVersions DocumentVersion[]
+  notifications Notification[]
+  
+  // Новые отношения для системы разрешений
+  roleId       String?
+  userRole     Role?      @relation(fields: [roleId], references: [id])
+  
+  // Отношения для структуры компании
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+}
+
+enum ShippingMethod {
+  RUSSIAN_POST
+  COURIER
+  SELF_PICKUP
+  OTHER
+}
+
+enum ShippingStatus {
+  PENDING
+  SHIPPED
+  DELIVERED
+  RETURNED
+  LOST
+}
+
+model Contract {
+  id          String        @id @default(cuid())
+  number      String
+  counterparty String
+  amount      Float
+  startDate   DateTime
+  endDate     DateTime
+  status      ContractStatus @default(DRAFT)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  // Shipping Information
+  shippingMethod ShippingMethod?
+  shippingStatus ShippingStatus?
+  trackingNumber String?
+  shippingDate   DateTime?
+  deliveryDate   DateTime?
+  shippingAddress String?
+  shippingNotes  String?
+  
+  // Relations
+  initiatorId  String
+  initiator    User         @relation(fields: [initiatorId], references: [id])
+  
+  workflowId  String?
+  workflow    Workflow?    @relation(fields: [workflowId], references: [id])
+  
+  documents    Document[]
+  comments     Comment[]
+  approvals    Approval[]
+  history      ContractHistory[]
+  notifications Notification[]
+}
+
+model Document {
+  id          String        @id @default(cuid())
+  filename    String
+  filePath    String
+  fileSize    Int
+  mimeType    String
+  type        DocumentType  @default(OTHER)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  // Relations
+  contractId  String
+  contract    Contract      @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  
+  versions    DocumentVersion[]
+}
+
+model DocumentVersion {
+  id          String   @id @default(cuid())
+  version     Int
+  filePath    String
+  changes     String   // JSON с описанием изменений
+  createdAt   DateTime @default(now())
+  
+  // Relations
+  documentId  String
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+}
+
+model Comment {
+  id            String   @id @default(cuid())
+  text          String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  authorId      String
+  author        User     @relation(fields: [authorId], references: [id])
+  
+  contractId    String
+  contract      Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  
+  parentId      String?
+  parent        Comment? @relation("CommentReplies", fields: [parentId], references: [id])
+  replies       Comment[] @relation("CommentReplies")
+}
+
+model Approval {
+  id          String        @id @default(cuid())
+  status      String        // "PENDING", "APPROVED", "REJECTED"
+  comment     String?
+  stepNumber  Int           @default(1)  // Переименовано из workflowStep
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  // Relations
+  approverId  String
+  approver    User          @relation(fields: [approverId], references: [id])
+  
+  contractId  String
+  contract    Contract      @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  
+  workflowStepId String?
+  workflowStep   WorkflowStep? @relation(fields: [workflowStepId], references: [id])
+  
+  dueDate     DateTime?
+}
+
+model ContractHistory {
+  id          String   @id @default(cuid())
+  action      String
+  details     String   // JSON с деталями действия
+  createdAt   DateTime @default(now())
+  
+  // Relations
+  contractId  String
+  contract    Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  type        NotificationType
+  title       String
+  message     String
+  read        Boolean          @default(false)
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
+  
+  // Relations
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  contractId  String?
+  contract    Contract?        @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  
+  actionUrl   String?
+}
+
+// Workflow Models
+model Workflow {
+  id          String         @id @default(cuid())
+  name        String
+  description String?
+  status      WorkflowStatus @default(DRAFT)
+  version     Int            @default(1)
+  isDefault   Boolean        @default(false)
+  conditions  String?        // JSON с условиями применения
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  
+  // Relations
+  steps       WorkflowStep[]
+  contracts   Contract[]
+}
+
+model WorkflowStep {
+  id          String           @id @default(cuid())
+  name        String
+  type        WorkflowStepType
+  order       Int
+  description String?
+  conditions  String?          // JSON с условиями для шага
+  isRequired  Boolean          @default(true)
+  dueDays     Int?             // Количество дней на выполнение
+  role        UserRole?        // Роль, которая должна выполнить шаг
+  userId      String?          // Конкретный пользователь, если нужен
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  
+  // Relations
+  workflowId  String
+  workflow    Workflow         @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  
+  approvals   Approval[]
+}
+
+// Reference Models
+model Reference {
+  id          String        @id @default(cuid())
+  type        ReferenceType
+  code        String        @unique
+  name        String
+  description String?
+  value       String?       // Дополнительное значение
+  isActive    Boolean       @default(true)
+  sortOrder   Int           @default(0)
+  metadata    String?       // JSON с дополнительными данными
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  // Relations
+  parentCode  String?       // Для иерархических справочников
+  children    Reference[]   @relation("ReferenceHierarchy")
+  parent      Reference?    @relation("ReferenceHierarchy", fields: [parentCode], references: [code])
+}

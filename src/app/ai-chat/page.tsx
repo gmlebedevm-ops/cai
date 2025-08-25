@@ -1,0 +1,965 @@
+'use client'
+
+import { useState, useEffect, useRef, useCallback, memo } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Separator } from '@/components/ui/separator'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { 
+  Send, 
+  Bot, 
+  User, 
+  Loader2, 
+  RefreshCw, 
+  Settings,
+  Maximize2,
+  Minimize2,
+  Trash2,
+  Copy,
+  CheckCircle,
+  AlertCircle,
+  FileText,
+  Database,
+  ChevronLeft,
+  ChevronRight,
+  Edit2,
+  Save,
+  X,
+  FileWarning,
+  Search,
+  Bell,
+  History
+} from 'lucide-react'
+
+interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: Date
+  isLoading?: boolean
+  error?: string
+}
+
+interface ChatSession {
+  id: string
+  title: string
+  createdAt: Date
+  lastMessage: Date
+  messages: ChatMessage[]
+}
+
+interface Contract {
+  id: string
+  number: string
+  counterparty: string
+  status: string
+  createdAt: string
+}
+
+interface Scenario {
+  id: string
+  title: string
+  description: string
+  icon: any
+  prompt: string
+  category: string
+}
+
+const predefinedScenarios: Scenario[] = [
+  {
+    id: 'risk-analysis',
+    title: 'Анализ рисков',
+    description: 'Сравнение с эталоном и выявление рисков',
+    icon: FileWarning,
+    prompt: 'Проанализируй предоставленный текст договора.',
+    category: 'analysis'
+  },
+  {
+    id: 'contract-card',
+    title: 'Создание карточки договора',
+    description: 'Автоматическое извлечение данных и проверка',
+    icon: FileText,
+    prompt: 'Проанализируй предоставленный текст договора.',
+    category: 'creation'
+  }
+]
+
+// Мемоизированный компонент для сообщения
+const MessageComponent = memo(({ 
+  message, 
+  onCopy 
+}: { 
+  message: ChatMessage; 
+  onCopy: (text: string) => void;
+}) => {
+  return (
+    <div
+      className={"flex gap-3 " + (
+        message.role === 'user' ? 'justify-end' : 'justify-start'
+      )}
+    >
+      {message.role === 'assistant' && (
+        <div className="flex-shrink-0">
+          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+            <Bot className="h-4 w-4 text-primary" />
+          </div>
+        </div>
+      )}
+      
+      <div className={"max-w-[80%] " + (
+        message.role === 'user' 
+          ? 'bg-primary text-primary-foreground' 
+          : 'bg-muted'
+      ) + " rounded-lg p-3"}>
+        {message.isLoading ? (
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">AI думает...</span>
+          </div>
+        ) : message.error ? (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-red-500">
+              <AlertCircle className="h-4 w-4" />
+              <span className="text-sm font-medium">Ошибка</span>
+            </div>
+            <p className="text-sm">{message.error}</p>
+          </div>
+        ) : (
+          <div className="whitespace-pre-wrap">{message.content}</div>
+        )}
+        
+        <div className="flex items-center gap-2 mt-1">
+          <span className="text-xs opacity-70">
+            {message.timestamp.toLocaleTimeString('ru-RU', { 
+              hour: '2-digit', 
+              minute: '2-digit' 
+            })}
+          </span>
+          {message.role === 'assistant' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 w-5 p-0"
+              onClick={() => onCopy(message.content)}
+            >
+              <Copy className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+      </div>
+      
+      {message.role === 'user' && (
+        <div className="flex-shrink-0">
+          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+            <User className="h-4 w-4 text-primary-foreground" />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+})
+
+MessageComponent.displayName = 'MessageComponent'
+
+// Мемоизированный компонент для поля ввода
+const InputComponent = memo(({ 
+  inputMessage, 
+  setInputMessage, 
+  onSend, 
+  isLoading, 
+  isActive 
+}: { 
+  inputMessage: string;
+  setInputMessage: (value: string) => void;
+  onSend: () => void;
+  isLoading: boolean;
+  isActive: boolean;
+}) => {
+  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      onSend()
+    }
+  }, [onSend])
+
+  return (
+    <div className="border-t bg-card p-2 flex-shrink-0">
+      <div className="flex gap-2">
+        <Input
+          value={inputMessage}
+          onChange={(e) => setInputMessage(e.target.value)}
+          onKeyPress={handleKeyPress}
+          placeholder="Введите сообщение..."
+          disabled={isLoading || !isActive}
+          className="flex-1"
+        />
+        <Button 
+          onClick={onSend}
+          disabled={isLoading || !inputMessage.trim() || !isActive}
+          size="sm"
+        >
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
+        </Button>
+      </div>
+      <div className="flex items-center justify-between mt-2">
+        <div className="text-xs text-muted-foreground">
+          Нажмите Enter для отправки, Shift+Enter для новой строки
+        </div>
+        {!isActive && (
+          <div className="flex items-center gap-2 text-xs text-orange-600">
+            <AlertCircle className="h-3 w-3" />
+            <span>AI-ассистент отключен</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+})
+
+InputComponent.displayName = 'InputComponent'
+
+export default function AIChatPage() {
+  const [sessions, setSessions] = useState<ChatSession[]>([])
+  const [currentSession, setCurrentSession] = useState<ChatSession | null>(null)
+  const [inputMessage, setInputMessage] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [aiSettings, setAiSettings] = useState({
+    isActive: false,
+    defaultModel: '',
+    provider: 'lm-studio'
+  })
+  const [contracts, setContracts] = useState<Contract[]>([])
+  const [selectedContractId, setSelectedContractId] = useState<string>('')
+  const [contractData, setContractData] = useState<any>(null)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [editedTitle, setEditedTitle] = useState('')
+  const [activeTab, setActiveTab] = useState('chat')
+  const [selectedScenario, setSelectedScenario] = useState<string>('')
+  const [copiedMessage, setCopiedMessage] = useState<string>('')
+  
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    loadSessions()
+    loadAISettings()
+    loadContracts()
+  }, [])
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [currentSession?.messages])
+
+  useEffect(() => {
+    if (selectedContractId) {
+      loadContractData(selectedContractId)
+    } else {
+      setContractData(null)
+    }
+  }, [selectedContractId])
+
+  const loadSessions = async () => {
+    setIsLoadingHistory(true)
+    try {
+      const contractId = selectedContractId || 'default'
+      const userId = 'current-user'
+      const response = await fetch(`/api/ai-assistant/history?contractId=${contractId}&userId=${userId}`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.messages && data.messages.length > 0) {
+          const session: ChatSession = {
+            id: data.id,
+            title: selectedContractId ? `Чат по договору ${contracts.find(c => c.id === selectedContractId)?.number || ''}` : 'Общий чат',
+            createdAt: new Date(data.createdAt),
+            lastMessage: new Date(data.updatedAt),
+            messages: data.messages.map((msg: any) => ({
+              id: `${msg.timestamp}_${msg.role}`,
+              role: msg.role,
+              content: msg.content,
+              timestamp: new Date(msg.timestamp)
+            }))
+          }
+          setSessions([session])
+          setCurrentSession(session)
+        } else {
+          const newSession: ChatSession = {
+            id: Date.now().toString(),
+            title: selectedContractId ? `Чат по договору ${contracts.find(c => c.id === selectedContractId)?.number || ''}` : 'Новый чат',
+            createdAt: new Date(),
+            lastMessage: new Date(),
+            messages: []
+          }
+          setSessions([newSession])
+          setCurrentSession(newSession)
+        }
+      }
+    } catch (error) {
+      console.error('Error loading chat sessions:', error)
+    } finally {
+      setIsLoadingHistory(false)
+    }
+  }
+
+  const loadAISettings = async () => {
+    try {
+      const response = await fetch('/api/ai-settings')
+      if (response.ok) {
+        const data = await response.json()
+        setAiSettings({
+          isActive: data.isActive || false,
+          defaultModel: data.defaultModel || '',
+          provider: data.provider || 'lm-studio'
+        })
+      }
+    } catch (error) {
+      console.error('Error loading AI settings:', error)
+    }
+  }
+
+  const loadContracts = async () => {
+    try {
+      const response = await fetch('/api/contracts')
+      if (response.ok) {
+        const data = await response.json()
+        setContracts(data.contracts || [])
+      }
+    } catch (error) {
+      console.error('Error loading contracts:', error)
+    }
+  }
+
+  const loadContractData = async (contractId: string) => {
+    try {
+      const contract = contracts.find(c => c.id === contractId)
+      if (contract) {
+        setContractData({
+          metadata: {
+            number: contract.number,
+            counterparty: contract.counterparty,
+            status: contract.status,
+            createdAt: contract.createdAt
+          },
+          text: '',
+          templates: [],
+          history: [],
+          counterparty: {
+            name: contract.counterparty
+          },
+          policies: []
+        })
+        loadSessions()
+      }
+    } catch (error) {
+      console.error('Error loading contract data:', error)
+    }
+  }
+
+  const handleContractChange = (contractId: string) => {
+    const actualContractId = contractId === 'no-contract' ? '' : contractId
+    setSelectedContractId(actualContractId)
+    setCurrentSession(null)
+    setSessions([])
+  }
+
+  const startEditingTitle = () => {
+    if (currentSession) {
+      setEditedTitle(currentSession.title)
+      setIsEditingTitle(true)
+    }
+  }
+
+  const saveEditedTitle = () => {
+    if (currentSession && editedTitle.trim()) {
+      const updatedSession = {
+        ...currentSession,
+        title: editedTitle.trim()
+      }
+      setCurrentSession(updatedSession)
+      setSessions(prev => prev.map(s => s.id === currentSession.id ? updatedSession : s))
+      setIsEditingTitle(false)
+    }
+  }
+
+  const cancelEditingTitle = () => {
+    setIsEditingTitle(false)
+    setEditedTitle('')
+  }
+
+  const handleScenarioSelect = (scenarioId: string) => {
+    const scenario = predefinedScenarios.find(s => s.id === scenarioId)
+    if (scenario) {
+      setSelectedScenario(scenarioId)
+      setInputMessage(scenario.prompt)
+      setActiveTab('chat')
+    }
+  }
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  const createNewSession = () => {
+    const newSession: ChatSession = {
+      id: Date.now().toString(),
+      title: selectedContractId ? `Чат по договору ${contracts.find(c => c.id === selectedContractId)?.number || ''}` : 'Новый чат',
+      createdAt: new Date(),
+      lastMessage: new Date(),
+      messages: []
+    }
+    setSessions(prev => [newSession, ...prev])
+    setCurrentSession(newSession)
+  }
+
+  const deleteSession = async (sessionId: string, event: React.MouseEvent) => {
+    event.stopPropagation()
+    try {
+      const contractId = selectedContractId || 'default'
+      const userId = 'current-user'
+      await fetch(`/api/ai-assistant/history?contractId=${contractId}&userId=${userId}`, {
+        method: 'DELETE'
+      })
+      
+      setSessions(prev => prev.filter(s => s.id !== sessionId))
+      if (currentSession?.id === sessionId) {
+        setCurrentSession(sessions.find(s => s.id !== sessionId) || null)
+      }
+    } catch (error) {
+      console.error('Error deleting session:', error)
+    }
+  }
+
+  const sendMessage = useCallback(async () => {
+    if (!inputMessage.trim() || !currentSession || isLoading || !aiSettings.isActive) return
+
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: inputMessage,
+      timestamp: new Date()
+    }
+
+    const assistantMessage: ChatMessage = {
+      id: (Date.now() + 1).toString(),
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      isLoading: true
+    }
+
+    // Обновляем состояние за один раз
+    const updatedSession = {
+      ...currentSession,
+      lastMessage: new Date(),
+      messages: [...currentSession.messages, userMessage, assistantMessage]
+    }
+
+    // Batch обновления состояния
+    setInputMessage('')
+    setIsLoading(true)
+    setCurrentSession(updatedSession)
+
+    try {
+      const messagesForAPI = updatedSession.messages
+        .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+        .map(msg => ({
+          role: msg.role,
+          content: msg.content
+        }))
+
+      const context = selectedContractId && contractData ? {
+        contractMetadata: contractData.metadata || {},
+        contractText: contractData.text || '',
+        templates: contractData.templates || [],
+        history: contractData.history || [],
+        counterparty: contractData.counterparty || {},
+        companyPolicies: contractData.policies || []
+      } : {
+        contractMetadata: {},
+        contractText: '',
+        templates: [],
+        history: [],
+        counterparty: {},
+        companyPolicies: []
+      }
+
+      const response = await fetch('/api/ai-assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: messagesForAPI,
+          context,
+          model: aiSettings.defaultModel,
+          provider: aiSettings.provider,
+          temperature: 0.2,
+          max_tokens: 2000,
+          top_p: 0.9
+        })
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        const contractId = selectedContractId || 'default'
+        const userId = 'current-user'
+        
+        // Сохраняем историю параллельно, не дожидаясь завершения
+        Promise.all([
+          fetch('/api/ai-assistant/history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contractId,
+              userId,
+              message: inputMessage,
+              role: 'user'
+            })
+          }),
+          fetch('/api/ai-assistant/history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contractId,
+              userId,
+              message: data.message?.content || data.response || '',
+              role: 'assistant'
+            })
+          })
+        ]).catch(historyError => {
+          console.error('Error saving chat history:', historyError)
+        })
+
+        // Финальное обновление состояния
+        const finalMessages = updatedSession.messages.map(msg => 
+          msg.id === assistantMessage.id 
+            ? { ...msg, content: data.message?.content || data.response || '', isLoading: false }
+            : msg
+        )
+
+        const finalSession = {
+          ...updatedSession,
+          messages: finalMessages,
+          title: updatedSession.title === 'Новый чат' && inputMessage.length > 0 
+            ? inputMessage.slice(0, 50) + (inputMessage.length > 50 ? '...' : '')
+            : updatedSession.title
+        }
+
+        setCurrentSession(finalSession)
+        setSessions(prev => prev.map(s => 
+          s.id === currentSession.id ? finalSession : s
+        ))
+      } else {
+        const errorMessages = updatedSession.messages.map(msg => 
+          msg.id === assistantMessage.id 
+            ? { ...msg, isLoading: false, error: data.error || 'Произошла ошибка' }
+            : msg
+        )
+
+        setCurrentSession({
+          ...updatedSession,
+          messages: errorMessages
+        })
+      }
+    } catch (error) {
+      console.error('Error sending message:', error)
+      
+      const errorMessages = updatedSession.messages.map(msg => 
+        msg.id === assistantMessage.id 
+          ? { ...msg, isLoading: false, error: 'Ошибка соединения с AI-ассистентом' }
+          : msg
+      )
+
+      setCurrentSession({
+        ...updatedSession,
+        messages: errorMessages
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }, [inputMessage, currentSession, isLoading, aiSettings.isActive, aiSettings.defaultModel, aiSettings.provider, selectedContractId, contractData])
+
+  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage()
+    }
+  }, [sendMessage])
+
+  const copyToClipboard = useCallback((text: string) => {
+    navigator.clipboard.writeText(text)
+    setCopiedMessage(text)
+    setTimeout(() => setCopiedMessage(''), 2000)
+  }, [])
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString('ru-RU', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    })
+  }
+
+  const formatDate = (date: Date) => {
+    const today = new Date()
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+    
+    if (date.toDateString() === today.toDateString()) {
+      return 'Сегодня'
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return 'Вчера'
+    } else {
+      return date.toLocaleDateString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit'
+      })
+    }
+  }
+
+  if (!aiSettings.isActive) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle className="flex items-center justify-center gap-2">
+              <Bot className="h-6 w-6" />
+              AI-ассистент
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-center space-y-4">
+            <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto" />
+            <div className="space-y-2">
+              <p className="text-lg font-medium">AI-ассистент отключен</p>
+              <p className="text-sm text-muted-foreground">
+                Для использования чата с AI-ассистентом необходимо активировать его в настройках
+              </p>
+            </div>
+            <Button 
+              onClick={() => window.location.href = '/admin/ai-settings'}
+              className="w-full"
+            >
+              <Settings className="h-4 w-4 mr-2" />
+              Перейти к настройкам
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  return (
+    <div className={"flex h-full bg-background overflow-hidden " + (isFullscreen ? 'fixed inset-0 z-50' : '')}>
+      {/* Боковая панель со списком сессий */}
+      <div className={(isSidebarCollapsed ? 'w-0 border-r-0' : 'w-80 border-r') + " bg-card flex flex-col transition-all duration-300 overflow-hidden flex-shrink-0"}>
+        {/* Заголовок боковой панели с кнопкой сворачивания */}
+        <div className="p-3 border-b bg-card flex items-center justify-between">
+          {!isSidebarCollapsed && (
+            <h2 className="text-lg font-semibold">Чат с AI</h2>
+          )}
+          {!isSidebarCollapsed && (
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              className="ml-auto"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+
+        {!isSidebarCollapsed && (
+          <>
+            {/* Выбор договора */}
+            <div className="p-4 border-b">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-medium">Договор</h3>
+                <Button variant="ghost" size="sm">
+                  <Database className="h-4 w-4" />
+                </Button>
+              </div>
+              <Select value={selectedContractId || 'no-contract'} onValueChange={handleContractChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Выберите договор" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no-contract">Без договора</SelectItem>
+                  {contracts.map((contract) => (
+                    <SelectItem key={contract.id} value={contract.id}>
+                      {contract.number} - {contract.counterparty}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Список сессий */}
+            <div className="flex-1 overflow-hidden">
+              <div className="p-2 space-y-1">
+                {isLoadingHistory ? (
+                  <div className="flex items-center justify-center h-full">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                ) : sessions.length === 0 ? (
+                  <div className="text-center text-muted-foreground py-4">
+                    <p className="text-sm">Нет чатов</p>
+                  </div>
+                ) : (
+                  sessions.map((session) => (
+                    <div
+                      key={session.id}
+                      className={"p-3 rounded-lg cursor-pointer transition-colors " + (
+                        currentSession?.id === session.id 
+                          ? 'bg-primary text-primary-foreground' 
+                          : 'hover:bg-muted'
+                      )}
+                      onClick={() => setCurrentSession(session)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium truncate">{session.title}</div>
+                          <div className="text-xs opacity-70">
+                            {formatDate(session.lastMessage)}
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 opacity-70 hover:opacity-100"
+                          onClick={(e) => deleteSession(session.id, e)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Кнопка создания нового чата */}
+            <div className="p-3 border-t">
+              <Button 
+                onClick={createNewSession}
+                className="w-full"
+                variant="outline"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Новый чат
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Основная область чата */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {currentSession ? (
+          <>
+            {/* Заголовок чата - фиксированный */}
+            <div className="p-3 border-b bg-card flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-3">
+                {isSidebarCollapsed && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setIsSidebarCollapsed(false)}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                )}
+                {isEditingTitle ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={editedTitle}
+                      onChange={(e) => setEditedTitle(e.target.value)}
+                      className="h-8"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveEditedTitle()
+                        if (e.key === 'Escape') cancelEditingTitle()
+                      }}
+                      autoFocus
+                    />
+                    <Button size="sm" variant="ghost" onClick={saveEditedTitle}>
+                      <Save className="h-4 w-4" />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={cancelEditingTitle}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-semibold">{currentSession.title}</h2>
+                    <Button size="sm" variant="ghost" onClick={startEditingTitle}>
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={createNewSession}>
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setIsFullscreen(!isFullscreen)}>
+                  {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+
+            {/* Скроллируемая область с вкладками */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {/* Вкладки */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col" key="main-tabs" style={{ contain: 'layout' }}>
+              <TabsList className="grid w-full grid-cols-3" key="tabs-list" style={{ contain: 'layout' }}>
+                <TabsTrigger value="chat" key="chat-trigger" style={{ contain: 'layout' }}>Чат</TabsTrigger>
+                <TabsTrigger value="scenarios" key="scenarios-trigger" style={{ contain: 'layout' }}>Сценарии</TabsTrigger>
+                <TabsTrigger value="history" key="history-trigger" style={{ contain: 'layout' }}>История</TabsTrigger>
+              </TabsList>
+
+              {/* Вкладка чата */}
+              <TabsContent value="chat" className="flex-1 flex flex-col m-0 p-0" key="chat-content" style={{ contain: 'layout' }}>
+                <div className="flex-1 overflow-y-auto" key="chat-messages-container" style={{ contain: 'layout' }}>
+                  <div className="space-y-4 w-full px-2 py-2" key="chat-messages" style={{ contain: 'layout' }}>
+                    {currentSession.messages.length === 0 ? (
+                      <div className="text-center py-8">
+                        <Bot className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                        <h3 className="text-lg font-medium mb-2">
+                          Начните диалог
+                        </h3>
+                        <p className="text-muted-foreground">
+                          Задайте вопрос AI-ассистенту или выберите сценарий
+                        </p>
+                      </div>
+                    ) : (
+                      currentSession.messages.map((message) => (
+                        <MessageComponent 
+                          key={message.id} 
+                          message={message} 
+                          onCopy={copyToClipboard}
+                        />
+                      ))
+                    )}
+                  </div>
+                  <div ref={messagesEndRef} />
+                </div>
+                
+                {/* Поле ввода */}
+                <InputComponent 
+                  inputMessage={inputMessage}
+                  setInputMessage={setInputMessage}
+                  onSend={sendMessage}
+                  isLoading={isLoading}
+                  isActive={aiSettings.isActive}
+                />
+              </TabsContent>
+
+              {/* Вкладка сценариев */}
+              <TabsContent value="scenarios" className="flex-1 m-0 overflow-hidden" key="scenarios-content">
+                <div className="flex-1 overflow-y-auto p-2" key="scenarios-container">
+                  <h3 className="text-lg font-semibold mb-4" key="scenarios-title">Предустановленные сценарии</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4" key="scenarios-grid">
+                    {predefinedScenarios.map((scenario) => (
+                      <Card 
+                        key={scenario.id}
+                        className={"cursor-pointer transition-colors hover:bg-muted/50 " + (
+                          selectedScenario === scenario.id ? 'ring-2 ring-primary' : ''
+                        )}
+                        onClick={() => handleScenarioSelect(scenario.id)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start gap-3">
+                            <div className="flex-shrink-0">
+                              <scenario.icon className="h-6 w-6 text-primary" />
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="font-medium mb-1">{scenario.title}</h4>
+                              <p className="text-sm text-muted-foreground">{scenario.description}</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* Вкладка истории */}
+              <TabsContent value="history" className="flex-1 m-0 overflow-hidden" key="history-content">
+                <div className="flex-1 overflow-y-auto p-2" key="history-container">
+                  <h3 className="text-lg font-semibold mb-4" key="history-title">История чатов</h3>
+                  <div className="space-y-3" key="history-list">
+                    {sessions.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <History className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p>Нет истории чатов</p>
+                      </div>
+                    ) : (
+                      sessions.map((session) => (
+                        <Card 
+                          key={session.id}
+                          className={"cursor-pointer transition-colors " + (
+                            currentSession?.id === session.id ? 'ring-2 ring-primary' : 'hover:bg-muted/50'
+                          )}
+                          onClick={() => setCurrentSession(session)}
+                        >
+                          <CardContent className="p-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <h4 className="font-medium">{session.title}</h4>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <span>{formatDate(session.createdAt)}</span>
+                                  <span>•</span>
+                                  <span>{session.messages.length} сообщений</span>
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={(e) => deleteSession(session.id, e)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center justify-center flex-1">
+            <div className="text-center space-y-4">
+              <Bot className="h-12 w-12 text-muted-foreground mx-auto" />
+              <div>
+                <h3 className="text-lg font-medium mb-2">
+                  Выберите или создайте чат
+                </h3>
+                <p className="text-muted-foreground">
+                  Начните новый диалог или выберите существующий из списка
+                </p>
+              </div>
+              <Button onClick={createNewSession}>
+                Создать новый чат
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,1579 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { 
+  Settings, 
+  Bot, 
+  Server, 
+  Key, 
+  CheckCircle, 
+  XCircle, 
+  RefreshCw,
+  Save,
+  TestTube,
+  Database,
+  Sliders,
+  Activity,
+  Copy,
+  Eye,
+  EyeOff,
+  Zap,
+  Info,
+  AlertTriangle,
+  BarChart3,
+  Play,
+  Pause,
+  Download,
+  Upload,
+  Filter,
+  Search,
+  X,
+  Cpu,
+  HardDrive,
+  Clock,
+  Star,
+  FileText
+} from 'lucide-react'
+
+interface AISettings {
+  id: string
+  provider: 'lm-studio' | 'z-ai' | 'openai' | 'anthropic'
+  lmStudioUrl: string
+  apiKey: string
+  defaultModel: string
+  temperature: number
+  maxTokens: number
+  topP: number
+  isActive: boolean
+  updatedAt: string
+}
+
+interface ModelInfo {
+  id: string
+  object: string
+  created: number
+  owned_by: string
+  size?: string
+  format?: string
+  family?: string
+  quantization?: string
+  context_length?: number
+  description?: string
+  parameters?: {
+    temperature: number
+    max_tokens: number
+    top_p: number
+  }
+  performance?: {
+    avg_response_time: number
+    success_rate: number
+    last_used: string
+  }
+  is_favorite?: boolean
+  is_tested?: boolean
+  test_result?: {
+    success: boolean
+    response_time: number
+    quality_score: number
+    notes: string
+  }
+}
+
+interface TestResult {
+  success: boolean
+  message: string
+  models?: ModelInfo[]
+  modelCount?: number
+  error?: string
+}
+
+export default function AISettingsPage() {
+  const [settings, setSettings] = useState<AISettings | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<TestResult | null>(null)
+  const [availableModels, setAvailableModels] = useState<ModelInfo[]>([])
+  const [showApiKey, setShowApiKey] = useState(false)
+  const [activeTab, setActiveTab] = useState('models')
+  const [modelSearch, setModelSearch] = useState('')
+  const [selectedModel, setSelectedModel] = useState<ModelInfo | null>(null)
+  const [testingModel, setTestingModel] = useState<string | null>(null)
+  const [modelProfiles, setModelProfiles] = useState([
+    {
+      id: 'legal',
+      name: 'Юридические задачи',
+      description: 'Оптимизировано для анализа договоров и юридических текстов',
+      temperature: 0.2,
+      maxTokens: 1800,
+      topP: 0.85,
+      icon: '⚖️'
+    },
+    {
+      id: 'creative',
+      name: 'Креативные задачи',
+      description: 'Для генерации текстов и креативных решений',
+      temperature: 0.7,
+      maxTokens: 2500,
+      topP: 0.95,
+      icon: '🎨'
+    },
+    {
+      id: 'analytical',
+      name: 'Аналитические задачи',
+      description: 'Для анализа данных и структурированных ответов',
+      temperature: 0.1,
+      maxTokens: 2000,
+      topP: 0.8,
+      icon: '📊'
+    }
+  ])
+  const [performanceStats, setPerformanceStats] = useState({
+    totalRequests: 0,
+    avgResponseTime: 0,
+    successRate: 100,
+    last24hRequests: 0
+  })
+  const [cacheInfo, setCacheInfo] = useState({
+    isCached: false,
+    lastUpdated: null as Date | null
+  })
+  const [notifications, setNotifications] = useState<{
+    modelIssues: string[]
+    performanceWarnings: string[]
+    systemAlerts: string[]
+  }>({
+    modelIssues: [],
+    performanceWarnings: [],
+    systemAlerts: []
+  })
+
+  useEffect(() => {
+    fetchSettings()
+    fetchPerformanceStats()
+  }, [])
+
+  // Автоматическая загрузка моделей при успешном подключении
+  useEffect(() => {
+    if (testResult?.success && testResult.models) {
+      setAvailableModels(testResult.models)
+      setCacheInfo({
+        isCached: false,
+        lastUpdated: new Date()
+      })
+    }
+  }, [testResult])
+
+  // Автоматическая загрузка моделей при загрузке страницы, если настройки активны
+  useEffect(() => {
+    if (settings?.isActive && availableModels.length === 0) {
+      // Сначала пробуем загрузить модели, если не получается - тестируем подключение
+      fetchAvailableModels().catch(() => {
+        if (settings.isActive) {
+          testConnection()
+        }
+      })
+    }
+  }, [settings, availableModels.length])
+
+  // Проверка проблем при изменении данных
+  useEffect(() => {
+    checkModelIssues()
+  }, [availableModels, performanceStats, settings])
+
+  const fetchSettings = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/ai-settings')
+      if (response.ok) {
+        const data = await response.json()
+        setSettings(data)
+      }
+    } catch (error) {
+      console.error('Error fetching AI settings:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const saveSettings = async () => {
+    if (!settings) return
+
+    try {
+      setSaving(true)
+      const response = await fetch('/api/ai-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setSettings(data)
+        // Показать уведомление об успешном сохранении
+        alert('Настройки успешно сохранены')
+        
+        // Если AI активен, автоматически тестируем подключение
+        if (data.isActive) {
+          setTimeout(() => {
+            testConnection()
+          }, 500) // Небольшая задержка чтобы убедиться что настройки сохранились
+        }
+      } else {
+        const error = await response.json()
+        alert(`Ошибка сохранения: ${error.error}`)
+      }
+    } catch (error) {
+      console.error('Error saving AI settings:', error)
+      alert('Ошибка при сохранении настроек')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const testConnection = async () => {
+    if (!settings) return
+
+    try {
+      setTesting(true)
+      const response = await fetch('/api/ai-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'test_connection' })
+      })
+
+      const result: TestResult = await response.json()
+      setTestResult(result)
+      
+      // Если подключение успешно и есть модели, сразу загружаем их
+      if (result.success && result.models && result.models.length > 0) {
+        setAvailableModels(result.models)
+        setCacheInfo({
+          isCached: false,
+          lastUpdated: new Date()
+        })
+      }
+    } catch (error) {
+      console.error('Error testing connection:', error)
+      setTestResult({
+        success: false,
+        message: 'Ошибка при тестировании подключения',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  const fetchAvailableModels = async () => {
+    if (!settings) return
+
+    try {
+      const response = await fetch('/api/ai-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_models' })
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        setAvailableModels(result.models)
+        setCacheInfo({
+          isCached: result.cached || false,
+          lastUpdated: result.cached ? new Date() : null
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching models:', error)
+    }
+  }
+
+  const fetchPerformanceStats = async () => {
+    try {
+      const response = await fetch('/api/ai-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_performance_stats' })
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        setPerformanceStats({
+          totalRequests: result.stats.totalRequests,
+          avgResponseTime: result.stats.avgResponseTime,
+          successRate: result.stats.successRate,
+          last24hRequests: result.stats.requestsLast24h
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching performance stats:', error)
+    }
+  }
+
+  const clearModelCache = async () => {
+    try {
+      const response = await fetch('/api/ai-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'clear_cache' })
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        setCacheInfo({ isCached: false, lastUpdated: null })
+        alert('Кэш моделей очищен')
+      }
+    } catch (error) {
+      console.error('Error clearing cache:', error)
+    }
+  }
+
+  const checkModelIssues = () => {
+    const issues: string[] = []
+    const warnings: string[] = []
+    const alerts: string[] = []
+
+    // Проверка проблем с моделями
+    const failedModels = availableModels.filter(model => 
+      model.is_tested && model.test_result && !model.test_result.success
+    )
+    
+    if (failedModels.length > 0) {
+      issues.push(`${failedModels.length} моделей не прошли тестирование`)
+    }
+
+    const slowModels = availableModels.filter(model => 
+      model.test_result && model.test_result.response_time > 5000
+    )
+    
+    if (slowModels.length > 0) {
+      warnings.push(`${slowModels.length} моделей имеют медленное время ответа`)
+    }
+
+    // Проверка производительности
+    if (performanceStats.successRate < 90 && performanceStats.totalRequests > 10) {
+      warnings.push('Низкий уровень успешности запросов (< 90%)')
+    }
+
+    if (performanceStats.avgResponseTime > 3000 && performanceStats.totalRequests > 0) {
+      warnings.push('Высокое среднее время ответа (> 3с)')
+    }
+
+    // Проверка системных проблем
+    if (!settings?.isActive) {
+      alerts.push('AI-ассистент отключен в настройках')
+    }
+
+    if (availableModels.length === 0) {
+      alerts.push('Нет доступных моделей. Проверьте подключение к AI-провайдеру.')
+    }
+
+    setNotifications({
+      modelIssues: issues,
+      performanceWarnings: warnings,
+      systemAlerts: alerts
+    })
+  }
+
+  const handleInputChange = async (field: keyof AISettings, value: any) => {
+    if (settings) {
+      let processedValue = value
+      
+      // Обработка специального значения для очистки модели
+      if (field === 'defaultModel' && value === 'no-model') {
+        processedValue = ''
+      }
+      
+      let newSettings = { ...settings, [field]: processedValue }
+      
+      // Автоматическая подстановка URL при выборе провайдера
+      if (field === 'provider') {
+        const providerUrls = {
+          'lm-studio': settings.lmStudioUrl, // Сохраняем текущий URL для LM Studio
+          'z-ai': 'Z.AI SDK', // Для Z.AI используем SDK
+          'openai': 'https://api.openai.com/v1',
+          'anthropic': 'https://api.anthropic.com/v1'
+        }
+        newSettings.lmStudioUrl = providerUrls[value as keyof typeof providerUrls] || settings.lmStudioUrl
+      }
+      
+      setSettings(newSettings)
+      
+      // Если изменяется модель, автоматически сохраняем настройки
+      if (field === 'defaultModel') {
+        try {
+          await fetch('/api/ai-settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newSettings)
+          })
+          console.log('Model saved successfully:', value)
+        } catch (error) {
+          console.error('Error saving model:', error)
+          // Возвращаем предыдущее значение в случае ошибки
+          setSettings(settings)
+        }
+      }
+    }
+  }
+
+  const getProviderName = (provider: string): string => {
+    switch (provider) {
+      case 'lm-studio':
+        return 'LM Studio'
+      case 'z-ai':
+        return 'Z.AI'
+      case 'openai':
+        return 'OpenAI'
+      case 'anthropic':
+        return 'Anthropic'
+      default:
+        return 'AI-провайдер'
+    }
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    alert('Скопировано в буфер обмена')
+  }
+
+  const testModel = async (modelId: string) => {
+    setTestingModel(modelId)
+    try {
+      const response = await fetch('/api/ai-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          action: 'test_model',
+          modelId,
+          testPrompt: 'Привет! Пожалуйста, представься кратко.'
+        })
+      })
+
+      const result = await response.json()
+      
+      // Обновляем информацию о модели с результатами теста
+      setAvailableModels(prev => prev.map(model => 
+        model.id === modelId 
+          ? { 
+              ...model, 
+              is_tested: true,
+              test_result: {
+                success: result.success,
+                response_time: result.response_time || 0,
+                quality_score: result.quality_score || 0,
+                notes: result.message || ''
+              }
+            }
+          : model
+      ))
+
+      alert(result.success ? 'Тест модели пройден успешно' : 'Тест модели не удался')
+    } catch (error) {
+      console.error('Error testing model:', error)
+      alert('Ошибка при тестировании модели')
+    } finally {
+      setTestingModel(null)
+    }
+  }
+
+  const toggleFavoriteModel = (modelId: string) => {
+    setAvailableModels(prev => prev.map(model => 
+      model.id === modelId 
+        ? { ...model, is_favorite: !model.is_favorite }
+        : model
+    ))
+  }
+
+  const applyModelProfile = (profileId: string) => {
+    const profile = modelProfiles.find(p => p.id === profileId)
+    if (profile && settings) {
+      setSettings(prev => prev ? {
+        ...prev,
+        temperature: profile.temperature,
+        maxTokens: profile.maxTokens,
+        topP: profile.topP
+      } : null)
+    }
+  }
+
+  const filteredModels = availableModels.filter(model =>
+    model.id.toLowerCase().includes(modelSearch.toLowerCase()) ||
+    model.owned_by.toLowerCase().includes(modelSearch.toLowerCase())
+  )
+
+  const favoriteModels = filteredModels.filter(model => model.is_favorite)
+  const otherModels = filteredModels.filter(model => !model.is_favorite)
+
+  const renderModelCard = (model: ModelInfo) => (
+    <div
+      key={model.id}
+      className={`p-4 border rounded-lg space-y-3 ${
+        settings?.defaultModel === model.id ? 'ring-2 ring-primary' : ''
+      }`}
+    >
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <h4 className="font-medium">{model.id}</h4>
+            {model.is_favorite && (
+              <Zap className="h-4 w-4 text-yellow-500" />
+            )}
+            {model.is_tested && (
+              <Badge variant={model.test_result?.success ? 'default' : 'destructive'} className="text-xs">
+                {model.test_result?.success ? 'Тест пройден' : 'Тест не пройден'}
+              </Badge>
+            )}
+            {settings?.defaultModel === model.id && (
+              <Badge variant="default" className="text-xs">По умолчанию</Badge>
+            )}
+          </div>
+          <div className="text-sm text-muted-foreground space-y-1">
+            <div>Автор: {model.owned_by}</div>
+            <div className="flex items-center gap-4">
+              <span>Создан: {new Date(model.created * 1000).toLocaleDateString()}</span>
+              {model.size && <span>Размер: {model.size}</span>}
+              {model.format && <span>Формат: {model.format}</span>}
+            </div>
+            {model.description && (
+              <p className="text-xs mt-2">{model.description}</p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => toggleFavoriteModel(model.id)}
+          >
+            {model.is_favorite ? <Zap className="h-4 w-4 text-yellow-500" /> : <Zap className="h-4 w-4" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => copyToClipboard(model.id)}
+          >
+            <Copy className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelectedModel(model)}
+          >
+            <Info className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between pt-2 border-t">
+        <div className="flex items-center gap-2">
+          {model.test_result && (
+            <div className="text-xs text-muted-foreground">
+              Время ответа: {model.test_result.response_time}ms • 
+              Качество: {model.test_result.quality_score}/10
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleInputChange('defaultModel', model.id)}
+            disabled={settings?.defaultModel === model.id}
+          >
+            {settings?.defaultModel === model.id ? 'Активна' : 'Выбрать'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => testModel(model.id)}
+            disabled={testingModel === model.id}
+          >
+            {testingModel === model.id ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <TestTube className="h-4 w-4" />
+            )}
+            {testingModel === model.id ? 'Тест...' : 'Тест'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Загрузка настроек AI...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!settings) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Settings className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">Не удалось загрузить настройки</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Заголовок страницы */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold">Настройки AI</h1>
+          <p className="text-muted-foreground">
+            Управление настройками искусственного интеллекта и моделями AI-провайдеров
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={fetchSettings} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Обновить
+          </Button>
+          <Button onClick={saveSettings} disabled={saving}>
+            <Save className="h-4 w-4 mr-2" />
+            {saving ? 'Сохранение...' : 'Сохранить'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Уведомления о проблемах */}
+      {(notifications.modelIssues.length > 0 || notifications.performanceWarnings.length > 0 || notifications.systemAlerts.length > 0) && (
+        <div className="space-y-3">
+          {notifications.systemAlerts.map((alert, index) => (
+            <Alert key={`alert-${index}`} className="border-red-200 bg-red-50">
+              <XCircle className="h-4 w-4 text-red-600" />
+              <AlertDescription className="text-red-800">
+                <strong>Системное предупреждение:</strong> {alert}
+              </AlertDescription>
+            </Alert>
+          ))}
+          
+          {notifications.modelIssues.map((issue, index) => (
+            <Alert key={`issue-${index}`} className="border-orange-200 bg-orange-50">
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+              <AlertDescription className="text-orange-800">
+                <strong>Проблема с моделями:</strong> {issue}
+              </AlertDescription>
+            </Alert>
+          ))}
+          
+          {notifications.performanceWarnings.map((warning, index) => (
+            <Alert key={`warning-${index}`} className="border-yellow-200 bg-yellow-50">
+              <AlertTriangle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-yellow-800">
+                <strong>Предупреждение производительности:</strong> {warning}
+              </AlertDescription>
+            </Alert>
+          ))}
+        </div>
+      )}
+
+      {/* Статус системы */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            Статус системы
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="flex items-center gap-2">
+              {settings.isActive ? (
+                <>
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <span className="text-green-600">AI-ассистент активен</span>
+                </>
+              ) : (
+                <>
+                  <XCircle className="h-4 w-4 text-red-500" />
+                  <span className="text-red-600">AI-ассистент отключен</span>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Server className="h-4 w-4 text-blue-500" />
+              <span className="text-sm">
+                {getProviderName(settings?.provider || 'lm-studio')}: {settings.lmStudioUrl}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Bot className="h-4 w-4 text-purple-500" />
+              <span className="text-sm">Модель: {settings.defaultModel ? settings.defaultModel : 'Не выбрана'}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Database className="h-4 w-4 text-orange-500" />
+              <span className="text-sm">Моделей: {availableModels.length}</span>
+            </div>
+          </div>
+          
+          {/* Дополнительная информация о производительности */}
+          {performanceStats.totalRequests > 0 && (
+            <div className="mt-4 pt-4 border-t">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-green-500" />
+                  <span>Всего запросов: {performanceStats.totalRequests}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-blue-500" />
+                  <span>Среднее время: {performanceStats.avgResponseTime}ms</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-purple-500" />
+                  <span>Успешность: {performanceStats.successRate}%</span>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Индикатор последнего подключения */}
+          {testResult && (
+            <div className="mt-4 pt-4 border-t">
+              <div className="flex items-center gap-2 text-sm">
+                {testResult.success ? (
+                  <>
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    <span className="text-green-600">Последнее подключение: успешно</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="h-4 w-4 text-red-500" />
+                    <span className="text-red-600">Последнее подключение: ошибка</span>
+                  </>
+                )}
+                {testResult.modelCount !== undefined && (
+                  <span className="text-muted-foreground">({testResult.modelCount} моделей)</span>
+                )}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Основные настройки */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="models">Модели и подключение</TabsTrigger>
+          <TabsTrigger value="profiles">Профили</TabsTrigger>
+          <TabsTrigger value="parameters">Параметры</TabsTrigger>
+        </TabsList>
+
+        {/* Вкладка моделей и подключения */}
+        <TabsContent value="models" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Server className="h-5 w-5" />
+                Настройки подключения к AI-провайдеру
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Левая колонка */}
+                <div className="space-y-6">
+                  {/* Выбор провайдера */}
+                  <div className="space-y-2">
+                    <Label htmlFor="provider">Провайдер AI</Label>
+                    <Select 
+                      value={settings?.provider || 'lm-studio'} 
+                      onValueChange={(value) => handleInputChange('provider', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Выберите провайдера" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="lm-studio">LM Studio</SelectItem>
+                        <SelectItem value="z-ai">Z.AI</SelectItem>
+                        <SelectItem value="openai">OpenAI</SelectItem>
+                        <SelectItem value="anthropic">Anthropic</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Выберите провайдера искусственного интеллекта
+                    </p>
+                  </div>
+
+                  {/* Модель по умолчанию */}
+                  <div className="space-y-2">
+                    <Label htmlFor="defaultModel">Модель по умолчанию</Label>
+                    <Select 
+                      value={settings?.defaultModel || undefined} 
+                      onValueChange={(value) => handleInputChange('defaultModel', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Модель не выбрана" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {/* Опция для очистки выбора модели */}
+                        <SelectItem value="no-model">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-muted-foreground">Очистить выбор модели</span>
+                            <span className="text-xs text-muted-foreground">
+                              Убрать модель по умолчанию
+                            </span>
+                          </div>
+                        </SelectItem>
+                        
+                        {favoriteModels.length > 0 && (
+                          <>
+                            <div className="px-2 py-1 text-sm font-semibold text-muted-foreground">Избранные</div>
+                            {favoriteModels.map((model) => (
+                              <SelectItem key={model.id} value={model.id}>
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{model.id}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {model.owned_by} • {model.size && `${model.size} • `}{new Date(model.created * 1000).toLocaleDateString()}
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </>
+                        )}
+                        {otherModels.length > 0 && (
+                          <>
+                            <div className="px-2 py-1 text-sm font-semibold text-muted-foreground">Все модели</div>
+                            {otherModels.slice(0, 10).map((model) => (
+                              <SelectItem key={model.id} value={model.id}>
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{model.id}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {model.owned_by} • {model.size && `${model.size} • `}{new Date(model.created * 1000).toLocaleDateString()}
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Модель, которая будет использоваться по умолчанию для всех запросов
+                    </p>
+                  </div>
+                </div>
+
+                {/* Правая колонка */}
+                <div className="space-y-6">
+                  {/* URL сервера */}
+                  <div className="space-y-2">
+                    <Label htmlFor="lmStudioUrl">URL сервера</Label>
+                    <Input
+                      id="lmStudioUrl"
+                      value={settings?.lmStudioUrl || ''}
+                      onChange={(e) => handleInputChange('lmStudioUrl', e.target.value)}
+                      placeholder="http://localhost:1234"
+                      disabled={settings?.provider === 'z-ai' || settings?.provider === 'openai' || settings?.provider === 'anthropic'}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {settings?.provider === 'lm-studio' 
+                        ? 'Адрес сервера LM Studio' 
+                        : settings?.provider === 'z-ai'
+                        ? 'Используется Z.AI SDK'
+                        : `URL для ${getProviderName(settings?.provider || '')} задается автоматически`}
+                    </p>
+                  </div>
+
+                  {/* API ключ */}
+                  <div className="space-y-2">
+                    <Label htmlFor="apiKey">API ключ</Label>
+                    <div className="relative">
+                      <Input
+                        id="apiKey"
+                        type={showApiKey ? 'text' : 'password'}
+                        value={settings.apiKey}
+                        onChange={(e) => handleInputChange('apiKey', e.target.value)}
+                        placeholder="your-api-key"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                      >
+                        {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Ключ для доступа к API AI-провайдера
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={settings.isActive}
+                    onCheckedChange={(checked) => handleInputChange('isActive', checked)}
+                  />
+                  <Label>Активировать AI-ассистента</Label>
+                </div>
+                <Badge variant={settings.isActive ? 'default' : 'secondary'}>
+                  {settings.isActive ? 'Активен' : 'Отключен'}
+                </Badge>
+              </div>
+
+              {/* Тестирование подключения */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium">Тестирование подключения</h4>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={testConnection}
+                      disabled={testing || !settings.isActive}
+                    >
+                      <TestTube className="h-4 w-4 mr-2" />
+                      {testing ? 'Тестирование...' : 'Проверить подключение'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={fetchAvailableModels}
+                      disabled={testing || !settings.isActive}
+                    >
+                      <Database className="h-4 w-4 mr-2" />
+                      Обновить модели
+                    </Button>
+                  </div>
+                </div>
+
+                {testResult && (
+                  <Alert className={testResult.success ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}>
+                    {testResult.success ? (
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-600" />
+                    )}
+                    <AlertDescription className={testResult.success ? 'text-green-800' : 'text-red-800'}>
+                      <div className="space-y-2">
+                        <p>{testResult.message}</p>
+                        {testResult.models && (
+                          <p className="text-sm">
+                            Доступно моделей: {testResult.modelCount}
+                          </p>
+                        )}
+                        {testResult.error && (
+                          <p className="text-sm font-mono bg-red-100 p-2 rounded">
+                            {testResult.error}
+                          </p>
+                        )}
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+              
+
+            </CardContent>
+          </Card>
+
+          {/* Секция моделей */}
+          <div className="grid gap-6">
+            {/* Список моделей */}
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <h3 className="text-lg font-semibold">Доступные модели</h3>
+                
+                {/* Поиск и управление */}
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                  <div className="relative flex-1 sm:flex-initial">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Поиск моделей..."
+                      value={modelSearch}
+                      onChange={(e) => setModelSearch(e.target.value)}
+                      className="pl-10 w-full sm:w-64"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={fetchAvailableModels}
+                      disabled={testing || !settings?.isActive}
+                    >
+                      <RefreshCw className={`h-4 w-4 mr-2 ${testing ? 'animate-spin' : ''}`} />
+                      Обновить список
+                    </Button>
+                    {cacheInfo.isCached && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={clearModelCache}
+                      >
+                        <Database className="h-4 w-4 mr-2" />
+                        Очистить кэш
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {cacheInfo.isCached && (
+                <div className="text-xs text-muted-foreground">
+                  Данные загружены из кэша. Последнее обновление: {cacheInfo.lastUpdated?.toLocaleTimeString()}
+                </div>
+              )}
+              
+              {favoriteModels.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Zap className="h-4 w-4" />
+                      Избранные модели
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {favoriteModels.map((model) => renderModelCard(model))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {otherModels.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Database className="h-4 w-4" />
+                      Все модели ({otherModels.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {otherModels.map((model) => renderModelCard(model))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {filteredModels.length === 0 && (
+                <Alert>
+                  <AlertDescription>
+                    {modelSearch 
+                      ? 'Модели, соответствующие поисковому запросу, не найдены.'
+                      : 'Список моделей пуст. Нажмите "Обновить список" для загрузки доступных моделей из AI-провайдера.'
+                    }
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* Вкладка профилей */}
+        <TabsContent value="profiles" className="space-y-4">
+          <div className="grid gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sliders className="h-5 w-5" />
+                  Профили настроек
+                </CardTitle>
+                <CardDescription>
+                  Предустановленные конфигурации для разных типов задач
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid gap-4">
+                  {modelProfiles.map((profile) => (
+                    <Card key={profile.id} className="cursor-pointer transition-colors hover:bg-muted/50">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-start gap-3">
+                            <div className="text-2xl">{profile.icon}</div>
+                            <div className="flex-1">
+                              <h4 className="font-medium mb-1">{profile.name}</h4>
+                              <p className="text-sm text-muted-foreground mb-3">
+                                {profile.description}
+                              </p>
+                              <div className="grid grid-cols-3 gap-4 text-xs">
+                                <div>
+                                  <span className="font-medium">Temperature:</span> {profile.temperature}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Max Tokens:</span> {profile.maxTokens}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Top P:</span> {profile.topP}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => applyModelProfile(profile.id)}
+                          >
+                            Применить
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                <Separator />
+
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium">Текущие настройки</h4>
+                  <div className="grid grid-cols-3 gap-4 p-4 bg-muted rounded-lg">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-primary">{settings?.temperature || 0}</div>
+                      <div className="text-xs text-muted-foreground">Temperature</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-primary">{settings?.maxTokens || 0}</div>
+                      <div className="text-xs text-muted-foreground">Max Tokens</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-primary">{settings?.topP || 0}</div>
+                      <div className="text-xs text-muted-foreground">Top P</div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Статистика производительности */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Статистика производительности
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-4 bg-muted rounded-lg">
+                    <div className="text-2xl font-bold text-primary">{performanceStats.totalRequests}</div>
+                    <div className="text-xs text-muted-foreground">Всего запросов</div>
+                  </div>
+                  <div className="text-center p-4 bg-muted rounded-lg">
+                    <div className="text-2xl font-bold text-green-600">{performanceStats.avgResponseTime}ms</div>
+                    <div className="text-xs text-muted-foreground">Среднее время ответа</div>
+                  </div>
+                  <div className="text-center p-4 bg-muted rounded-lg">
+                    <div className="text-2xl font-bold text-blue-600">{performanceStats.successRate}%</div>
+                    <div className="text-xs text-muted-foreground">Успешных запросов</div>
+                  </div>
+                  <div className="text-center p-4 bg-muted rounded-lg">
+                    <div className="text-2xl font-bold text-purple-600">{performanceStats.last24hRequests}</div>
+                    <div className="text-xs text-muted-foreground">За 24 часа</div>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <h4 className="text-sm font-medium">История производительности</h4>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={fetchPerformanceStats}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Обновить
+                  </Button>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm">Общая производительность системы</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-green-500 transition-all duration-300"
+                          style={{ width: `${performanceStats.successRate}%` }}
+                        />
+                      </div>
+                      <span className="text-sm text-muted-foreground">{performanceStats.successRate}%</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm">Эффективность ответов</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-blue-500 transition-all duration-300"
+                          style={{ width: `${Math.min(100, (performanceStats.avgResponseTime > 0 ? 3000 / performanceStats.avgResponseTime : 100))}%` }}
+                        />
+                      </div>
+                      <span className="text-sm text-muted-foreground">
+                        {performanceStats.avgResponseTime > 0 ? Math.min(100, Math.round(3000 / performanceStats.avgResponseTime)) : 0}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {performanceStats.totalRequests > 0 && (
+                  <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      Система обработала {performanceStats.totalRequests} запросов со средней скоростью ответа {performanceStats.avgResponseTime}ms. 
+                      Уровень успешности: {performanceStats.successRate}%.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {performanceStats.totalRequests === 0 && (
+                  <Alert>
+                    <Info className="h-4 w-4" />
+                    <AlertDescription>
+                      Статистика будет доступна после первого использования AI-ассистента.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* Вкладка параметров */}
+        <TabsContent value="parameters" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sliders className="h-5 w-5" />
+                Параметры генерации
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="temperature">
+                    Temperature ({settings.temperature})
+                  </Label>
+                  <Input
+                    id="temperature"
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={settings.temperature}
+                    onChange={(e) => handleInputChange('temperature', parseFloat(e.target.value))}
+                    className="w-full"
+                  />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>0.0</span>
+                    <span>Более предсказуемо</span>
+                    <span>Более креативно</span>
+                    <span>1.0</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Рекомендуется для юридических задач: 0.1-0.3
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="maxTokens">Max Tokens</Label>
+                  <Input
+                    id="maxTokens"
+                    type="number"
+                    min="100"
+                    max="4000"
+                    value={settings.maxTokens}
+                    onChange={(e) => handleInputChange('maxTokens', parseInt(e.target.value))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Максимальная длина ответа в токенах (100-4000)
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="topP">
+                    Top P ({settings.topP})
+                  </Label>
+                  <Input
+                    id="topP"
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={settings.topP}
+                    onChange={(e) => handleInputChange('topP', parseFloat(e.target.value))}
+                    className="w-full"
+                  />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>0.0</span>
+                    <span>Более консервативно</span>
+                    <span>Более разнообразно</span>
+                    <span>1.0</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Альтернатива temperature для управления разнообразием
+                  </p>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Рекомендуемые настройки */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium">Рекомендуемые настройки</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 border rounded-lg">
+                    <h5 className="font-medium mb-2">Для юридических задач</h5>
+                    <div className="space-y-1 text-sm">
+                      <div>Temperature: 0.1-0.3</div>
+                      <div>Max Tokens: 1500-2000</div>
+                      <div>Top P: 0.8-0.9</div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => {
+                        handleInputChange('temperature', 0.2)
+                        handleInputChange('maxTokens', 1800)
+                        handleInputChange('topP', 0.85)
+                      }}
+                    >
+                      Применить
+                    </Button>
+                  </div>
+                  
+                  <div className="p-4 border rounded-lg">
+                    <h5 className="font-medium mb-2">Для креативных задач</h5>
+                    <div className="space-y-1 text-sm">
+                      <div>Temperature: 0.5-0.7</div>
+                      <div>Max Tokens: 2000-3000</div>
+                      <div>Top P: 0.9-1.0</div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => {
+                        handleInputChange('temperature', 0.6)
+                        handleInputChange('maxTokens', 2500)
+                        handleInputChange('topP', 0.95)
+                      }}
+                    >
+                      Применить
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Информация о последнем обновлении */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <span>Последнее обновление: {new Date(settings.updatedAt).toLocaleString('ru-RU')}</span>
+            <span>ID конфигурации: {settings.id}</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Модальное окно с детальной информацией о модели */}
+      <Dialog open={!!selectedModel} onOpenChange={() => setSelectedModel(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Cpu className="h-5 w-5" />
+              Детальная информация о модели
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedModel && (
+            <div className="space-y-6">
+              {/* Основная информация */}
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-semibold mb-2">{selectedModel.id}</h3>
+                  <p className="text-sm text-muted-foreground">{selectedModel.description || 'Универсальная языковая модель'}</p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Автор</Label>
+                    <div className="text-sm">{selectedModel.owned_by}</div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Создана</Label>
+                    <div className="text-sm">{new Date(selectedModel.created * 1000).toLocaleDateString()}</div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Размер</Label>
+                    <div className="text-sm flex items-center gap-1">
+                      <HardDrive className="h-3 w-3" />
+                      {selectedModel.size || 'Unknown'}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Формат</Label>
+                    <div className="text-sm">{selectedModel.format || 'Unknown'}</div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Семейство</Label>
+                    <div className="text-sm">{selectedModel.family || 'Unknown'}</div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Квантизация</Label>
+                    <div className="text-sm">{selectedModel.quantization || 'Unknown'}</div>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Статус и тестирование */}
+              <div className="space-y-4">
+                <h4 className="font-medium">Статус и тестирование</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Избранная</Label>
+                    <div className="text-sm flex items-center gap-1">
+                      {selectedModel.is_favorite ? (
+                        <>
+                          <Star className="h-3 w-3 text-yellow-500 fill-current" />
+                          <span>Да</span>
+                        </>
+                      ) : (
+                        <>
+                          <Star className="h-3 w-3" />
+                          <span>Нет</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Протестирована</Label>
+                    <div className="text-sm flex items-center gap-1">
+                      {selectedModel.is_tested ? (
+                        <>
+                          <CheckCircle className={`h-3 w-3 ${selectedModel.test_result?.success ? 'text-green-500' : 'text-red-500'}`} />
+                          <span>{selectedModel.test_result?.success ? 'Успешно' : 'С ошибками'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="h-3 w-3 text-gray-500" />
+                          <span>Нет</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {selectedModel.test_result && (
+                  <div className="p-3 bg-muted rounded-lg space-y-2">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="font-medium">Время ответа:</span> {selectedModel.test_result.response_time}ms
+                      </div>
+                      <div>
+                        <span className="font-medium">Качество:</span> {selectedModel.test_result.quality_score}/10
+                      </div>
+                    </div>
+                    {selectedModel.test_result.notes && (
+                      <div>
+                        <span className="font-medium">Заметки:</span> {selectedModel.test_result.notes}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* Рекомендуемые параметры */}
+              <div className="space-y-4">
+                <h4 className="font-medium">Рекомендуемые параметры</h4>
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="p-3 border rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-sm">Для юридических задач</span>
+                      <Badge variant="outline" className="text-xs">Рекомендуется</Badge>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                      <div>Temperature: 0.1-0.3</div>
+                      <div>Max Tokens: 1500-2000</div>
+                      <div>Top P: 0.8-0.9</div>
+                    </div>
+                  </div>
+                  
+                  <div className="p-3 border rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-sm">Для креативных задач</span>
+                      <Badge variant="outline" className="text-xs">Альтернатива</Badge>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                      <div>Temperature: 0.5-0.7</div>
+                      <div>Max Tokens: 2000-3000</div>
+                      <div>Top P: 0.9-1.0</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Действия */}
+              <div className="flex justify-between pt-4 border-t">
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => toggleFavoriteModel(selectedModel.id)}
+                  >
+                    {selectedModel.is_favorite ? (
+                      <>
+                        <Star className="h-4 w-4 mr-2 text-yellow-500 fill-current" />
+                        Убрать из избранного
+                      </>
+                    ) : (
+                      <>
+                        <Star className="h-4 w-4 mr-2" />
+                        Добавить в избранное
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => testModel(selectedModel.id)}
+                    disabled={testingModel === selectedModel.id}
+                  >
+                    {testingModel === selectedModel.id ? (
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <TestTube className="h-4 w-4 mr-2" />
+                    )}
+                    Тестировать
+                  </Button>
+                </div>
+                <Button
+                  onClick={() => {
+                    handleInputChange('defaultModel', selectedModel.id)
+                    setSelectedModel(null)
+                  }}
+                  disabled={settings?.defaultModel === selectedModel.id}
+                >
+                  {settings?.defaultModel === selectedModel.id ? 'Активна' : 'Выбрать как основную'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
