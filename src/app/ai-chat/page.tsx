@@ -574,7 +574,7 @@ export default function AIChatPage() {
               onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
               className="ml-auto"
             >
-              <PanelRightClose className="h-4 w-4" />
+              <PanelRightOpen className="h-4 w-4" />
             </Button>
           )}
         </div>
@@ -663,7 +663,7 @@ export default function AIChatPage() {
                     size="sm"
                     onClick={() => setIsSidebarCollapsed(false)}
                   >
-                    <PanelRightOpen className="h-4 w-4" />
+                    <PanelRightClose className="h-4 w-4" />
                   </Button>
                 )}
                 {isEditingTitle ? (
