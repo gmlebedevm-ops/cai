@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import { Workflow, WorkflowStep, WorkflowStatus, WorkflowStepType, CreateWorkflowInput } from '@/types/workflow'
 import { useAuth } from '@/hooks/use-auth'
+import EnhancedWorkflowForm from '@/components/workflows/enhanced-workflow-form'
 
 const statusColors = {
   [WorkflowStatus.ACTIVE]: 'bg-green-500',
@@ -304,32 +305,34 @@ export default function WorkflowsPage() {
               Создать маршрут
             </Button>
           </DialogTrigger>
-          <DialogContent className="w-[1100px] max-w-[90vw] max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogContent className="adaptive-dialog max-h-[90vh] overflow-hidden flex flex-col">
             <DialogHeader className="flex-shrink-0 pb-4 border-b">
-              <DialogTitle>Создание маршрута согласования</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="text-xl">Создание маршрута согласования</DialogTitle>
+              <DialogDescription className="text-base">
                 Настройте новый маршрут согласования договоров
               </DialogDescription>
             </DialogHeader>
             
-            {/* Фиксированные вкладки */}
-            <div className="flex-shrink-0 border-b">
-              <WorkflowForm
+            <div className="flex-shrink-0 overflow-y-auto max-h-[calc(90vh-200px)]">
+              <EnhancedWorkflowForm
                 formData={formData}
                 setFormData={setFormData}
                 addStep={addStep}
                 updateStep={updateStep}
                 removeStep={removeStep}
                 moveStep={moveStep}
+                mode="create"
+                onSave={handleCreateWorkflow}
+                onCancel={() => setCreateDialogOpen(false)}
               />
             </div>
             
-            <DialogFooter className="flex-shrink-0 pt-4 border-t">
-              <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+            <DialogFooter className="flex-shrink-0 pt-4 border-t flex flex-col sm:flex-row gap-2">
+              <Button variant="outline" onClick={() => setCreateDialogOpen(false)} className="w-full sm:w-auto">
                 Отмена
               </Button>
-              <Button onClick={handleCreateWorkflow}>
-                Создать
+              <Button onClick={handleCreateWorkflow} className="w-full sm:w-auto">
+                Создать маршрут
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -477,238 +480,38 @@ export default function WorkflowsPage() {
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="w-[1100px] max-w-[90vw] max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogContent className="adaptive-dialog max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader className="flex-shrink-0 pb-4 border-b">
-            <DialogTitle>Редактирование маршрута согласования</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-xl">Редактирование маршрута согласования</DialogTitle>
+            <DialogDescription className="text-base">
               Измените настройки маршрута согласования
             </DialogDescription>
           </DialogHeader>
           
-          {/* Фиксированные вкладки */}
-          <div className="flex-shrink-0 border-b">
-            <WorkflowForm
-              formData={formData}
-              setFormData={setFormData}
-              addStep={addStep}
-              updateStep={updateStep}
-              removeStep={removeStep}
-              moveStep={moveStep}
-            />
-          </div>
+          <div className="flex-shrink-0 overflow-y-auto max-h-[calc(90vh-200px)]">
+              <EnhancedWorkflowForm
+                formData={formData}
+                setFormData={setFormData}
+                addStep={addStep}
+                updateStep={updateStep}
+                removeStep={removeStep}
+                moveStep={moveStep}
+                mode="edit"
+                onSave={handleUpdateWorkflow}
+                onCancel={() => setEditDialogOpen(false)}
+              />
+            </div>
           
-          <DialogFooter className="flex-shrink-0 pt-4 border-t">
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+          <DialogFooter className="flex-shrink-0 pt-4 border-t flex flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="w-full sm:w-auto">
               Отмена
             </Button>
-            <Button onClick={handleUpdateWorkflow}>
-              Сохранить
+            <Button onClick={handleUpdateWorkflow} className="w-full sm:w-auto">
+              Сохранить изменения
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
-  )
-}
-
-interface WorkflowFormProps {
-  formData: CreateWorkflowInput
-  setFormData: (data: CreateWorkflowInput) => void
-  addStep: () => void
-  updateStep: (index: number, field: string, value: any) => void
-  removeStep: (index: number) => void
-  moveStep: (index: number, direction: 'up' | 'down') => void
-}
-
-function WorkflowForm({ 
-  formData, 
-  setFormData, 
-  addStep, 
-  updateStep, 
-  removeStep, 
-  moveStep 
-}: WorkflowFormProps) {
-  return (
-    <Tabs defaultValue="basic" className="w-full">
-      <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="basic">Основные настройки</TabsTrigger>
-        <TabsTrigger value="steps">Шаги согласования</TabsTrigger>
-      </TabsList>
-      
-      <TabsContent value="basic" className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="name">Название маршрута *</Label>
-          <Input
-            id="name"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            placeholder="Введите название маршрута"
-          />
-        </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="description">Описание</Label>
-          <Textarea
-            id="description"
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            placeholder="Введите описание маршрута"
-            rows={3}
-          />
-        </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="status">Статус</Label>
-          <Select 
-            value={formData.status} 
-            onValueChange={(value) => setFormData({ ...formData, status: value as WorkflowStatus })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(statusLabels).map(([key, label]) => (
-                <SelectItem key={key} value={key}>{label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="conditions">Условия применения</Label>
-          <Textarea
-            id="conditions"
-            value={formData.conditions}
-            onChange={(e) => setFormData({ ...formData, conditions: e.target.value })}
-            placeholder="JSON с условиями применения маршрута"
-            rows={4}
-          />
-        </div>
-      </TabsContent>
-      
-      <TabsContent value="steps" className="space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-medium">Шаги согласования</h3>
-          <Button type="button" variant="outline" onClick={addStep}>
-            <Plus className="h-4 w-4 mr-2" />
-            Добавить шаг
-          </Button>
-        </div>
-        
-        <div className="space-y-4">
-          {formData.steps?.map((step, index) => (
-            <Card key={index}>
-              <CardHeader className="pb-4">
-                <div className="flex justify-between items-center">
-                  <CardTitle className="text-base">Шаг {index + 1}</CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => moveStep(index, 'up')}
-                      disabled={index === 0}
-                    >
-                      <MoveUp className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => moveStep(index, 'down')}
-                      disabled={index === (formData.steps?.length || 0) - 1}
-                    >
-                      <MoveDown className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeStep(index)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Название шага *</Label>
-                    <Input
-                      value={step.name}
-                      onChange={(e) => updateStep(index, 'name', e.target.value)}
-                      placeholder="Название шага"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Тип шага *</Label>
-                    <Select 
-                      value={step.type} 
-                      onValueChange={(value) => updateStep(index, 'type', value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(stepTypeLabels).map(([key, label]) => (
-                          <SelectItem key={key} value={key}>{label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Дней на выполнение</Label>
-                    <Input
-                      type="number"
-                      value={step.dueDays || ''}
-                      onChange={(e) => updateStep(index, 'dueDays', parseInt(e.target.value) || undefined)}
-                      placeholder="3"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Обязательный шаг</Label>
-                    <Switch
-                      checked={step.isRequired}
-                      onCheckedChange={(checked) => updateStep(index, 'isRequired', checked)}
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Описание</Label>
-                  <Textarea
-                    value={step.description}
-                    onChange={(e) => updateStep(index, 'description', e.target.value)}
-                    placeholder="Описание шага"
-                    rows={2}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Условия</Label>
-                  <Textarea
-                    value={step.conditions}
-                    onChange={(e) => updateStep(index, 'conditions', e.target.value)}
-                    placeholder="JSON с условиями для шага"
-                    rows={2}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          
-          {(!formData.steps || formData.steps.length === 0) && (
-            <Card>
-              <CardContent className="text-center py-8">
-                <p className="text-muted-foreground">
-                  Нет добавленных шагов согласования
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </TabsContent>
-    </Tabs>
   )
 }

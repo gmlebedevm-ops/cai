@@ -120,3 +120,41 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Адаптивные диалоговые окна */
+@layer utilities {
+  .adaptive-dialog {
+    width: 90vw;
+    max-width: 1400px;
+  }
+  
+  @media (min-width: 640px) {
+    .adaptive-dialog {
+      width: 85vw;
+    }
+  }
+  
+  @media (min-width: 768px) {
+    .adaptive-dialog {
+      width: 80vw;
+    }
+  }
+  
+  @media (min-width: 1024px) {
+    .adaptive-dialog {
+      width: 75vw;
+    }
+  }
+  
+  @media (min-width: 1280px) {
+    .adaptive-dialog {
+      width: 70vw;
+    }
+  }
+  
+  @media (min-width: 1536px) {
+    .adaptive-dialog {
+      width: 65vw;
+    }
+  }
+}
