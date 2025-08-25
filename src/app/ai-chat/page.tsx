@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
@@ -128,7 +129,7 @@ export default function AIChatPage() {
   const [showQuickActions, setShowQuickActions] = useState(true)
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -142,6 +143,10 @@ export default function AIChatPage() {
   }, [currentSession?.messages])
 
   useEffect(() => {
+    autoResizeTextarea()
+  }, [inputMessage])
+
+  useEffect(() => {
     if (selectedContractId) {
       loadContractData(selectedContractId)
     } else {
@@ -153,6 +158,25 @@ export default function AIChatPage() {
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, 100)
+  }
+
+  const autoResizeTextarea = () => {
+    const textarea = inputRef.current
+    if (textarea) {
+      // Сбрасываем высоту до авто для правильного пересчета
+      textarea.style.height = 'auto'
+      // Устанавливаем новую высоту на основе контента
+      textarea.style.height = `${textarea.scrollHeight}px`
+      
+      // Ограничиваем максимальную высоту
+      const maxHeight = 200
+      if (textarea.scrollHeight > maxHeight) {
+        textarea.style.height = `${maxHeight}px`
+        textarea.style.overflowY = 'auto'
+      } else {
+        textarea.style.overflowY = 'hidden'
+      }
+    }
   }
 
   const loadSessions = async () => {
@@ -557,28 +581,6 @@ export default function AIChatPage() {
 
         {!isSidebarCollapsed && (
           <>
-            {/* Выбор договора */}
-            <div className="p-4 border-b">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-medium">Договор</h3>
-                <Button variant="ghost" size="sm">
-                  <Database className="h-4 w-4" />
-                </Button>
-              </div>
-              <select 
-                value={selectedContractId || 'no-contract'} 
-                onChange={(e) => handleContractChange(e.target.value)}
-                className="w-full p-2 border rounded-md bg-background text-sm"
-              >
-                <option value="no-contract">Без договора</option>
-                {contracts.map((contract) => (
-                  <option key={contract.id} value={contract.id}>
-                    {contract.number} - {contract.counterparty}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             {/* Список сессий - скроллируемая область */}
             <div className="flex-1 overflow-y-auto">
               <div className="p-2 space-y-1">
@@ -623,16 +625,26 @@ export default function AIChatPage() {
               </div>
             </div>
 
-            {/* Кнопка создания нового чата - зафиксирована внизу */}
-            <div className="p-3 border-t bg-card flex-shrink-0">
-              <Button 
-                onClick={createNewSession}
-                className="w-full"
-                variant="outline"
+            {/* Выбор договора - зафиксирован внизу */}
+            <div className="p-4 border-t bg-card flex-shrink-0">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-medium text-sm">Договор для контекста</h3>
+                <Button variant="ghost" size="sm">
+                  <Database className="h-4 w-4" />
+                </Button>
+              </div>
+              <select 
+                value={selectedContractId || 'no-contract'} 
+                onChange={(e) => handleContractChange(e.target.value)}
+                className="w-full p-2 border rounded-md bg-background text-sm"
               >
-                <SquarePen className="h-4 w-4 mr-2" />
-                Новый чат
-              </Button>
+                <option value="no-contract">Без договора</option>
+                {contracts.map((contract) => (
+                  <option key={contract.id} value={contract.id}>
+                    {contract.number} - {contract.counterparty}
+                  </option>
+                ))}
+              </select>
             </div>
           </>
         )}
@@ -804,20 +816,26 @@ export default function AIChatPage() {
 
               {/* Область ввода */}
               <div className="border-t bg-card p-4 flex-shrink-0">
-                <div className="flex gap-2">
-                  <Input
+                <div className="flex gap-2 items-start">
+                  <Textarea
                     ref={inputRef}
                     value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyPress={handleKeyPress}
+                    onChange={(e) => {
+                      setInputMessage(e.target.value)
+                      autoResizeTextarea()
+                    }}
+                    onFocus={autoResizeTextarea}
+                    onKeyDown={handleKeyPress}
                     placeholder="Введите сообщение..."
                     disabled={isLoading || !aiSettings.isActive}
-                    className="flex-1"
+                    className="flex-1 resize-none min-h-[60px] max-h-[200px] overflow-hidden"
+                    rows={2}
                   />
                   <Button 
                     onClick={sendMessage}
                     disabled={isLoading || !inputMessage.trim() || !aiSettings.isActive}
                     size="sm"
+                    className="mt-[36px]"
                   >
                     {isLoading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />

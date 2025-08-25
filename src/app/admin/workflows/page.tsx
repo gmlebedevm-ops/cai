@@ -304,22 +304,27 @@ export default function WorkflowsPage() {
               Создать маршрут
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
+          <DialogContent className="w-[1100px] max-w-[90vw] max-h-[85vh] overflow-hidden flex flex-col">
+            <DialogHeader className="flex-shrink-0 pb-4 border-b">
               <DialogTitle>Создание маршрута согласования</DialogTitle>
               <DialogDescription>
                 Настройте новый маршрут согласования договоров
               </DialogDescription>
             </DialogHeader>
-            <WorkflowForm
-              formData={formData}
-              setFormData={setFormData}
-              addStep={addStep}
-              updateStep={updateStep}
-              removeStep={removeStep}
-              moveStep={moveStep}
-            />
-            <DialogFooter>
+            
+            {/* Фиксированные вкладки */}
+            <div className="flex-shrink-0 border-b">
+              <WorkflowForm
+                formData={formData}
+                setFormData={setFormData}
+                addStep={addStep}
+                updateStep={updateStep}
+                removeStep={removeStep}
+                moveStep={moveStep}
+              />
+            </div>
+            
+            <DialogFooter className="flex-shrink-0 pt-4 border-t">
               <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
                 Отмена
               </Button>
@@ -472,22 +477,27 @@ export default function WorkflowsPage() {
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="w-[1100px] max-w-[90vw] max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader className="flex-shrink-0 pb-4 border-b">
             <DialogTitle>Редактирование маршрута согласования</DialogTitle>
             <DialogDescription>
               Измените настройки маршрута согласования
             </DialogDescription>
           </DialogHeader>
-          <WorkflowForm
-            formData={formData}
-            setFormData={setFormData}
-            addStep={addStep}
-            updateStep={updateStep}
-            removeStep={removeStep}
-            moveStep={moveStep}
-          />
-          <DialogFooter>
+          
+          {/* Фиксированные вкладки */}
+          <div className="flex-shrink-0 border-b">
+            <WorkflowForm
+              formData={formData}
+              setFormData={setFormData}
+              addStep={addStep}
+              updateStep={updateStep}
+              removeStep={removeStep}
+              moveStep={moveStep}
+            />
+          </div>
+          
+          <DialogFooter className="flex-shrink-0 pt-4 border-t">
             <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
               Отмена
             </Button>
