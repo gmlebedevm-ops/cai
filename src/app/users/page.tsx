@@ -24,7 +24,7 @@ import {
   CheckCircle,
   UserCheck,
   User as UserIcon,
-  Building,
+  Building2,
   Shield,
   Activity
 } from 'lucide-react'
@@ -358,7 +358,7 @@ export default function UsersPage() {
                     <Separator />
                     <div className="space-y-3">
                       <h4 className="text-sm font-medium flex items-center gap-2">
-                        <Building className="h-4 w-4" />
+                        <Building2 className="h-4 w-4" />
                         Организационная структура
                       </h4>
                       <div className="space-y-2">
@@ -541,7 +541,7 @@ export default function UsersPage() {
                         <TableCell>
                           {user.department ? (
                             <Badge variant="outline" className="flex items-center gap-1">
-                              <Building className="h-3 w-3" />
+                              <Building2 className="h-3 w-3" />
                               {user.department.name}
                             </Badge>
                           ) : (

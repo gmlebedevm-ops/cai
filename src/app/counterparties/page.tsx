@@ -14,7 +14,7 @@ import {
   Plus, 
   Search, 
   Filter, 
-  Building, 
+  Contact, 
   Phone, 
   Mail, 
   MapPin, 
@@ -26,6 +26,7 @@ import {
   Upload,
   FileText
 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { Reference, ReferenceType } from '@/types/index'
 
 interface Counterparty extends Reference {
@@ -50,6 +51,7 @@ const statusLabels = {
 }
 
 export default function CounterpartiesPage() {
+  const router = useRouter()
   const [counterparties, setCounterparties] = useState<Counterparty[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -199,6 +201,10 @@ export default function CounterpartiesPage() {
     })
   }
 
+  const handleViewCounterparty = (counterpartyId: string) => {
+    router.push(`/counterparties/${counterpartyId}`)
+  }
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
   }
@@ -279,7 +285,7 @@ export default function CounterpartiesPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Всего контрагентов</CardTitle>
-            <Building className="h-4 w-4 text-muted-foreground" />
+            <Contact className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{counterparties.length}</div>
@@ -288,7 +294,7 @@ export default function CounterpartiesPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Активные</CardTitle>
-            <Building className="h-4 w-4 text-green-600" />
+            <Contact className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -299,7 +305,7 @@ export default function CounterpartiesPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Неактивные</CardTitle>
-            <Building className="h-4 w-4 text-gray-600" />
+            <Contact className="h-4 w-4 text-gray-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -366,7 +372,11 @@ export default function CounterpartiesPage() {
               {filteredCounterparties.map((counterparty) => {
                 const contactInfo = counterparty.value ? JSON.parse(counterparty.value) : {}
                 return (
-                  <Card key={counterparty.id} className="hover:shadow-md transition-shadow">
+                  <Card 
+                    key={counterparty.id} 
+                    className="hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => handleViewCounterparty(counterparty.id)}
+                  >
                     <CardContent className="p-6">
                       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                         <div className="flex-1 space-y-2">
@@ -382,14 +392,17 @@ export default function CounterpartiesPage() {
                             )}
                           </div>
                           
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground" onClick={(e) => e.stopPropagation()}>
                             <span className="font-mono bg-muted px-2 py-1 rounded">
                               {counterparty.code}
                             </span>
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => copyToClipboard(counterparty.code)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                copyToClipboard(counterparty.code)
+                              }}
                               className="h-6 w-6 p-0"
                             >
                               <Copy className="h-3 w-3" />
@@ -423,25 +436,41 @@ export default function CounterpartiesPage() {
                             )}
                             {contactInfo.website && (
                               <div className="flex items-center gap-1">
-                                <Building className="h-3 w-3" />
+                                <Contact className="h-3 w-3" />
                                 <span className="truncate">{contactInfo.website}</span>
                               </div>
                             )}
                           </div>
                         </div>
                         
-                        <div className="flex gap-2">
+                        <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleEditClick(counterparty)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleViewCounterparty(counterparty.id)
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleEditClick(counterparty)
+                            }}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDeleteCounterparty(counterparty.id)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDeleteCounterparty(counterparty.id)
+                            }}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

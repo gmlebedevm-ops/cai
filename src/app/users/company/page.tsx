@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Building, Plus, Edit, Trash2, Users, ChevronRight, AlertTriangle } from 'lucide-react'
+import { Building2, Plus, Edit, Trash2, Users, ChevronRight, AlertTriangle } from 'lucide-react'
 import { Department } from '@/types'
 
 interface DepartmentWithChildren extends Department {
@@ -192,7 +192,7 @@ export default function CompanyPage() {
       <TableCell>
         <div className="flex items-center gap-2" style={{ paddingLeft: `${level * 20}px` }}>
           {level > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-          <Building className="h-4 w-4" />
+          <Building2 className="h-4 w-4" />
           <span className="font-medium">{department.name}</span>
           {!department.isActive && (
             <Badge variant="secondary" className="text-xs">
@@ -211,7 +211,7 @@ export default function CompanyPage() {
       </TableCell>
       <TableCell>
         <div className="flex items-center gap-2">
-          <Building className="h-4 w-4" />
+          <Building2 className="h-4 w-4" />
           <span>{department._count.children}</span>
         </div>
       </TableCell>
@@ -387,7 +387,7 @@ export default function CompanyPage() {
               <div className="space-y-4">
                 {departmentTree.length === 0 ? (
                   <div className="text-center py-8">
-                    <Building className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                    <Building2 className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                     <p className="text-muted-foreground">Отделы еще не созданы</p>
                     <p className="text-sm text-muted-foreground">
                       Создайте первый отдел, чтобы начать формирование структуры компании
@@ -538,7 +538,7 @@ function DepartmentTreeNode({ department, onEdit, onDelete, level }: DepartmentT
         )}
         {!hasChildren && <div className="w-6" />}
         
-        <Building className="h-5 w-5 text-muted-foreground" />
+        <Building2 className="h-5 w-5 text-muted-foreground" />
         
         <div className="flex-1">
           <div className="flex items-center gap-2">

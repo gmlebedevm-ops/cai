@@ -26,7 +26,8 @@ import {
   MoreHorizontal,
   ChevronRight,
   ChevronDown,
-  Copy
+  Copy,
+  Info
 } from 'lucide-react'
 import { Reference, ReferenceType, CreateReferenceInput, UpdateReferenceInput } from '@/types/workflow'
 import { useAuth } from '@/hooks/use-auth'

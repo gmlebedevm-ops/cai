@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
-import { User, Building, Edit, Save, X } from 'lucide-react'
+import { User, Building2, Edit, Save, X } from 'lucide-react'
 import { Department } from '@/types'
 
 interface UserDepartmentAssignmentProps {
@@ -65,7 +65,7 @@ export function UserDepartmentAssignment({
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogTrigger asChild>
           <Button variant="ghost" size="sm">
-            <Building className="h-4 w-4" />
+            <Building2 className="h-4 w-4" />
           </Button>
         </DialogTrigger>
         <DialogContent className="sm:max-w-[425px]">
@@ -120,7 +120,7 @@ export function UserDepartmentAssignment({
         <div className="flex items-center gap-3">
           {currentDepartment ? (
             <div className="flex items-center gap-2">
-              <Building className="h-4 w-4 text-muted-foreground" />
+              <Building2 className="h-4 w-4 text-muted-foreground" />
               <Badge variant="secondary">
                 {currentDepartment.name}
               </Badge>
@@ -205,7 +205,7 @@ export function DepartmentUsersList({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Building className="h-5 w-5" />
+          <Building2 className="h-5 w-5" />
           {department.name}
           <Badge variant="secondary" className="ml-auto">
             {departmentUsers.length} пользователей

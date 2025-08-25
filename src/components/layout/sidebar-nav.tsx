@@ -16,7 +16,8 @@ import {
   CheckSquare,
   AlertTriangle,
   FolderOpen,
-  Building,
+  Building2,
+  Contact,
   UserCheck,
   Calendar,
   MessageSquare,
@@ -49,7 +50,7 @@ const navigation = [
   {
     name: 'Контрагенты',
     href: '/counterparties',
-    icon: Building,
+    icon: Contact,
     description: 'Управление контрагентами'
   },
   {
@@ -107,8 +108,8 @@ const navigation = [
     children: [
       { name: 'Все пользователи', href: '/users', icon: Users },
       { name: 'Роли и права', href: '/users/roles', icon: UserCheck },
-      { name: 'Компания', href: '/users/company', icon: Building },
-      { name: 'Структура компании', href: '/company-structure', icon: Building },
+      { name: 'Компания', href: '/users/company', icon: Building2 },
+      { name: 'Структура компании', href: '/company-structure', icon: Building2 },
     ]
   },
   {

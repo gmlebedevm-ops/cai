@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { 
-  Building, 
+  Building2, 
   Users, 
   ChevronDown, 
   ChevronRight, 
@@ -43,8 +43,8 @@ function TreeNode({ node, level, onNodeClick }: TreeNodeProps) {
   }
 
   const getNodeIcon = () => {
-    if (level === 0) return <Building className="h-5 w-5 text-blue-600" />
-    if (level === 1) return <Building className="h-4 w-4 text-green-600" />
+    if (level === 0) return <Building2 className="h-5 w-5 text-blue-600" />
+    if (level === 1) return <Building2 className="h-4 w-4 text-green-600" />
     return <Users className="h-4 w-4 text-gray-600" />
   }
 
@@ -123,7 +123,7 @@ export default function OrganizationChart({ data, onNodeClick, className }: Orga
       <Card className={className}>
         <CardContent className="flex items-center justify-center p-8">
           <div className="text-center text-muted-foreground">
-            <Building className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p>Нет данных о структуре компании</p>
           </div>
         </CardContent>
@@ -136,7 +136,7 @@ export default function OrganizationChart({ data, onNodeClick, className }: Orga
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Building className="h-5 w-5" />
+            <Building2 className="h-5 w-5" />
             Организационная структура
           </CardTitle>
         </CardHeader>
@@ -145,7 +145,7 @@ export default function OrganizationChart({ data, onNodeClick, className }: Orga
             {/* Корневой узел */}
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-center gap-3 mb-2">
-                <Building className="h-6 w-6 text-blue-600" />
+                <Building2 className="h-6 w-6 text-blue-600" />
                 <div>
                   <div className="font-semibold text-lg">{data.root_node}</div>
                   <div className="text-sm text-blue-600">Руководство компании</div>
