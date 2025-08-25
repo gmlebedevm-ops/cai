@@ -124,6 +124,7 @@ interface EnhancedWorkflowFormProps {
   mode?: 'create' | 'edit'
   onSave?: () => void
   onCancel?: () => void
+  initialSelectedTemplate?: string
 }
 
 export default function EnhancedWorkflowForm({
@@ -135,11 +136,22 @@ export default function EnhancedWorkflowForm({
   moveStep,
   mode = 'create',
   onSave,
-  onCancel
+  onCancel,
+  initialSelectedTemplate
 }: EnhancedWorkflowFormProps) {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
-  const [previewMode, setPreviewMode] = useState(false)
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
+  const [previewMode, setPreviewMode] = useState(mode === 'edit' ? false : false)
+  const [selectedTemplate, setSelectedTemplate] = useState<string>(initialSelectedTemplate || (mode === 'edit' ? 'custom' : ''))
+  const [activeTab, setActiveTab] = useState(mode === 'edit' ? 'basic' : 'basic')
+
+  // Эффект для автоматического переключения на вкладку предпросмотра
+  useEffect(() => {
+    if (previewMode) {
+      setActiveTab('preview')
+    } else if (activeTab === 'preview') {
+      setActiveTab('basic')
+    }
+  }, [previewMode, activeTab])
 
   const applyTemplate = (templateIndex: number) => {
     const template = workflowTemplates[templateIndex]
@@ -217,9 +229,20 @@ export default function EnhancedWorkflowForm({
         <div className="flex-1">
           <h2 className="text-xl sm:text-2xl font-semibold">
             {mode === 'create' ? 'Создание маршрута согласования' : 'Редактирование маршрута'}
+            {previewMode && (
+              <Badge variant="secondary" className="ml-2">
+                <Eye className="h-3 w-3 mr-1" />
+                Режим предпросмотра
+              </Badge>
+            )}
           </h2>
           <p className="text-muted-foreground text-sm sm:text-base">
-            {mode === 'create' ? 'Настройте новый маршрут для согласования договоров' : 'Измените настройки маршрута'}
+            {previewMode 
+              ? 'Вы просматриваете маршрут в режиме предпросмотра. Нажмите "Редактировать" для внесения изменений.'
+              : mode === 'create' 
+                ? 'Настройте новый маршрут для согласования договоров' 
+                : 'Измените настройки маршрута'
+            }
           </p>
         </div>
         
@@ -227,7 +250,15 @@ export default function EnhancedWorkflowForm({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setPreviewMode(!previewMode)}
+            onClick={() => {
+              if (previewMode) {
+                setPreviewMode(false)
+                setActiveTab('basic')
+              } else {
+                setPreviewMode(true)
+                setActiveTab('preview')
+              }
+            }}
             className="flex-1 sm:flex-none"
           >
             <Eye className="h-4 w-4 mr-2" />
@@ -272,7 +303,7 @@ export default function EnhancedWorkflowForm({
       </Card>
 
       {/* Выбор шаблона */}
-      {!selectedTemplate && (
+      {!selectedTemplate && mode === 'create' && (
         <Card>
           <CardHeader className="pb-4">
             <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
@@ -329,16 +360,16 @@ export default function EnhancedWorkflowForm({
         </Card>
       )}
 
-      {selectedTemplate && (
-        <Tabs defaultValue="basic" className="space-y-6">
+      {(selectedTemplate || mode === 'edit') && (
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto p-1 bg-muted rounded-lg">
-            <TabsTrigger value="basic" className="text-xs sm:text-sm py-2 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <TabsTrigger value="basic" className="text-xs sm:text-sm py-2 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm" disabled={previewMode}>
               Основные
             </TabsTrigger>
-            <TabsTrigger value="steps" className="text-xs sm:text-sm py-2 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <TabsTrigger value="steps" className="text-xs sm:text-sm py-2 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm" disabled={previewMode}>
               Шаги
             </TabsTrigger>
-            <TabsTrigger value="conditions" className="text-xs sm:text-sm py-2 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <TabsTrigger value="conditions" className="text-xs sm:text-sm py-2 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm" disabled={previewMode}>
               Условия
             </TabsTrigger>
             <TabsTrigger value="preview" className="text-xs sm:text-sm py-2 px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">

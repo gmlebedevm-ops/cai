@@ -499,6 +499,7 @@ export default function WorkflowsPage() {
                 mode="edit"
                 onSave={handleUpdateWorkflow}
                 onCancel={() => setEditDialogOpen(false)}
+                initialSelectedTemplate="custom"
               />
             </div>
           

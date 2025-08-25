@@ -558,11 +558,60 @@ interface ReferenceFormProps {
 
 function ReferenceForm({ formData, setFormData, references, isEdit = false }: ReferenceFormProps) {
   const parentOptions = references.filter(ref => 
-    ref.type === formData.type && ref.isActive
+    ref.type === formData.type && ref.isActive && ref.id !== (formData as any).id
   )
+
+  const validateForm = () => {
+    const errors: string[] = []
+    
+    if (!formData.type) {
+      errors.push('Тип справочника обязателен')
+    }
+    
+    if (!formData.code?.trim()) {
+      errors.push('Код обязателен')
+    } else if (!/^[A-Z0-9_]+$/.test(formData.code)) {
+      errors.push('Код должен содержать только заглавные буквы, цифры и подчеркивание')
+    }
+    
+    if (!formData.name?.trim()) {
+      errors.push('Название обязательно')
+    }
+    
+    if (formData.sortOrder !== undefined && formData.sortOrder < 0) {
+      errors.push('Порядок сортировки не может быть отрицательным')
+    }
+    
+    // Валидация JSON для метаданных
+    if (formData.metadata?.trim()) {
+      try {
+        JSON.parse(formData.metadata)
+      } catch {
+        errors.push('Метаданные должны быть валидным JSON')
+      }
+    }
+    
+    return errors
+  }
+
+  const formErrors = validateForm()
 
   return (
     <div className="space-y-4">
+      {formErrors.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-3">
+          <div className="flex items-center gap-2 text-red-700 mb-2">
+            <XCircle className="h-4 w-4" />
+            <span className="font-medium text-sm">Ошибки заполнения:</span>
+          </div>
+          <ul className="text-sm text-red-600 space-y-1">
+            {formErrors.map((error, i) => (
+              <li key={i}>• {error}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="type">Тип справочника *</Label>
@@ -580,6 +629,9 @@ function ReferenceForm({ formData, setFormData, references, isEdit = false }: Re
               ))}
             </SelectContent>
           </Select>
+          {!formData.type && (
+            <p className="text-xs text-red-500">Тип справочника обязателен</p>
+          )}
         </div>
         
         <div className="space-y-2">
@@ -587,10 +639,17 @@ function ReferenceForm({ formData, setFormData, references, isEdit = false }: Re
           <Input
             id="code"
             value={formData.code}
-            onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-            placeholder="Уникальный код"
+            onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+            placeholder="Уникальный код (A-Z, 0-9, _)"
             disabled={isEdit}
+            className={!formData.code?.trim() || !/^[A-Z0-9_]+$/.test(formData.code) ? 'border-red-200' : ''}
           />
+          {!formData.code?.trim() && (
+            <p className="text-xs text-red-500">Код обязателен</p>
+          )}
+          {formData.code && !/^[A-Z0-9_]+$/.test(formData.code) && (
+            <p className="text-xs text-red-500">Только заглавные буквы, цифры и подчеркивание</p>
+          )}
         </div>
       </div>
       
@@ -601,7 +660,11 @@ function ReferenceForm({ formData, setFormData, references, isEdit = false }: Re
           value={formData.name}
           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
           placeholder="Название элемента"
+          className={!formData.name?.trim() ? 'border-red-200' : ''}
         />
+        {!formData.name?.trim() && (
+          <p className="text-xs text-red-500">Название обязательно</p>
+        )}
       </div>
       
       <div className="space-y-2">
@@ -631,10 +694,15 @@ function ReferenceForm({ formData, setFormData, references, isEdit = false }: Re
           <Input
             id="sortOrder"
             type="number"
+            min="0"
             value={formData.sortOrder}
             onChange={(e) => setFormData({ ...formData, sortOrder: parseInt(e.target.value) || 0 })}
             placeholder="0"
+            className={formData.sortOrder < 0 ? 'border-red-200' : ''}
           />
+          {formData.sortOrder < 0 && (
+            <p className="text-xs text-red-500">Порядок сортировки не может быть отрицательным</p>
+          )}
         </div>
       </div>
       
@@ -666,9 +734,36 @@ function ReferenceForm({ formData, setFormData, references, isEdit = false }: Re
           id="metadata"
           value={formData.metadata}
           onChange={(e) => setFormData({ ...formData, metadata: e.target.value })}
-          placeholder="Дополнительные данные в формате JSON"
+          placeholder='{"key": "value"}'
           rows={3}
+          className={formData.metadata && !isValidJSON(formData.metadata) ? 'border-red-200' : ''}
         />
+        {formData.metadata && !isValidJSON(formData.metadata) && (
+          <p className="text-xs text-red-500">Метаданные должны быть валидным JSON</p>
+        )}
+        <div className="bg-muted/50 p-3 rounded-lg">
+          <h4 className="font-medium mb-2 flex items-center gap-2">
+            <Info className="h-4 w-4" />
+            Примеры метаданных
+          </h4>
+          <div className="space-y-1 text-sm">
+            <div>
+              <code className="bg-background px-2 py-1 rounded text-xs">
+                {`{"email": "contact@company.com"}`}
+              </code>
+            </div>
+            <div>
+              <code className="bg-background px-2 py-1 rounded text-xs">
+                {`{"phone": "+7 (999) 123-45-67"}`}
+              </code>
+            </div>
+            <div>
+              <code className="bg-background px-2 py-1 rounded text-xs">
+                {`{"address": "г. Москва, ул. Примерная, 1"}`}
+              </code>
+            </div>
+          </div>
+        </div>
       </div>
       
       <div className="flex items-center space-x-2">
@@ -681,4 +776,14 @@ function ReferenceForm({ formData, setFormData, references, isEdit = false }: Re
       </div>
     </div>
   )
+}
+
+// Вспомогательная функция для валидации JSON
+function isValidJSON(str: string): boolean {
+  try {
+    JSON.parse(str)
+    return true
+  } catch {
+    return false
+  }
 }
