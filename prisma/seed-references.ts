@@ -11,11 +11,130 @@ async function main() {
 
   // Контрагенты
   const counterparties = [
-    { code: 'CLIENT_001', name: 'ООО "Ромашка"', description: 'Клиент по умолчанию', value: '001' },
-    { code: 'CLIENT_002', name: 'ООО "Василек"', description: 'Крупный клиент', value: '002' },
-    { code: 'CLIENT_003', name: 'ИП Петров И.И.', description: 'Индивидуальный предприниматель', value: '003' },
-    { code: 'CLIENT_004', name: 'АО "Гвоздика"', description: 'Государственная компания', value: '004' },
-    { code: 'CLIENT_005', name: 'ООО "Незабудка"', description: 'Иностранный партнер', value: '005' },
+    { 
+      code: 'CLIENT_001', 
+      name: 'ООО "Ромашка"', 
+      description: 'Крупный поставщик офисной техники и расходных материалов', 
+      value: JSON.stringify({
+        phone: '+7 (495) 123-45-67',
+        email: 'info@romashka.ru',
+        address: 'г. Москва, ул. Садовая, д. 15, офис 301',
+        website: 'https://romashka.ru'
+      })
+    },
+    { 
+      code: 'CLIENT_002', 
+      name: 'ООО "Василек"', 
+      description: 'IT-компания, разработчик программного обеспечения', 
+      value: JSON.stringify({
+        phone: '+7 (812) 234-56-78',
+        email: 'contact@vasilek.com',
+        address: 'г. Санкт-Петербург, Невский пр., д. 42',
+        website: 'https://vasilek.com'
+      })
+    },
+    { 
+      code: 'CLIENT_003', 
+      name: 'ИП Петров И.И.', 
+      description: 'Индивидуальный предприниматель, консалтинговые услуги', 
+      value: JSON.stringify({
+        phone: '+7 (916) 345-67-89',
+        email: 'petrov.ii@example.com',
+        address: 'г. Москва, ул. Тверская, д. 7',
+        website: ''
+      })
+    },
+    { 
+      code: 'CLIENT_004', 
+      name: 'АО "Гвоздика"', 
+      description: 'Государственная компания, строительные услуги', 
+      value: JSON.stringify({
+        phone: '+7 (499) 456-78-90',
+        email: 'office@gvozdika.ru',
+        address: 'г. Москва, ул. Профсоюзная, д. 89',
+        website: 'https://gvozdika.ru'
+      })
+    },
+    { 
+      code: 'CLIENT_005', 
+      name: 'ООО "Незабудка"', 
+      description: 'Иностранный партнер, логистические услуги', 
+      value: JSON.stringify({
+        phone: '+7 (495) 567-89-01',
+        email: 'moscow@nezabudka.com',
+        address: 'г. Москва, ул. Смоленская, д. 12',
+        website: 'https://nezabudka.com'
+      })
+    },
+    { 
+      code: 'CLIENT_006', 
+      name: 'ООО "Ландыш"', 
+      description: 'Поставщик мебели и офисного оборудования', 
+      value: JSON.stringify({
+        phone: '+7 (495) 678-90-12',
+        email: 'sales@landysh.ru',
+        address: 'г. Москва, ул. Гарибальди, д. 23',
+        website: 'https://landysh.ru'
+      })
+    },
+    { 
+      code: 'CLIENT_007', 
+      name: 'ООО "Фиалка"', 
+      description: 'Маркетинговое агентство', 
+      value: JSON.stringify({
+        phone: '+7 (812) 789-01-23',
+        email: 'hello@fialka.com',
+        address: 'г. Санкт-Петербург, ул. Рубинштейна, д. 15',
+        website: 'https://fialka.com'
+      })
+    },
+    { 
+      code: 'CLIENT_008', 
+      name: 'ИП Сидоров А.В.', 
+      description: 'Юридические и бухгалтерские услуги', 
+      value: JSON.stringify({
+        phone: '+7 (926) 890-12-34',
+        email: 'sidorov.av@example.com',
+        address: 'г. Москва, ул. Арбат, д. 35',
+        website: ''
+      })
+    },
+    // Иерархические контрагенты
+    { 
+      code: 'CLIENT_GROUP_A', 
+      name: 'Группа компаний "Прогресс"', 
+      description: 'Холдинговая компания, объединяющая несколько предприятий', 
+      value: JSON.stringify({
+        phone: '+7 (495) 111-22-33',
+        email: 'info@progress-group.ru',
+        address: 'г. Москва, ул. Красная Пресня, д. 1',
+        website: 'https://progress-group.ru'
+      })
+    },
+    { 
+      code: 'CLIENT_SUB_A1', 
+      name: 'ООО "Прогресс-Строй"', 
+      description: 'Строительное подразделение холдинга', 
+      value: JSON.stringify({
+        phone: '+7 (495) 222-33-44',
+        email: 'stroy@progress-group.ru',
+        address: 'г. Москва, ул. Строителей, д. 10',
+        website: 'https://stroy.progress-group.ru'
+      }),
+      parentCode: 'CLIENT_GROUP_A'
+    },
+    { 
+      code: 'CLIENT_SUB_A2', 
+      name: 'ООО "Прогресс-Трейд"', 
+      description: 'Торговое подразделение холдинга', 
+      value: JSON.stringify({
+        phone: '+7 (495) 333-44-55',
+        email: 'trade@progress-group.ru',
+        address: 'г. Москва, ул. Торговой, д. 20',
+        website: 'https://trade.progress-group.ru'
+      }),
+      parentCode: 'CLIENT_GROUP_A'
+    },
   ]
 
   // Типы договоров
@@ -67,7 +186,7 @@ async function main() {
     { code: 'ACT', name: 'Акт выполненных работ', description: 'Акт сдачи-приемки' },
     { code: 'PROTOCOL', name: 'Протокол', description: 'Протокол разногласий или согласования' },
     { code: 'CERTIFICATE', name: 'Сертификат', description: 'Сертификат качества' },
-    { code: 'LICENSE', name: 'Лицензия', description: 'Лицензионный документ' },
+    { code: 'LICENSE_DOC', name: 'Лицензия', description: 'Лицензионный документ' },
   ]
 
   // Причины согласования
@@ -105,7 +224,7 @@ async function main() {
           isActive: true,
           sortOrder: 0,
           metadata: null,
-          parentCode: null,
+          parentCode: ref.parentCode || null,
         },
       })
     }
@@ -132,50 +251,6 @@ async function main() {
 
   await createReferences(rejectionReasons, ReferenceType.REJECTION_REASON)
   console.log('✅ Причины отказа созданы')
-
-  // Создаем некоторые иерархические структуры для примера
-  // Иерархия контрагентов
-  await prisma.reference.create({
-    data: {
-      type: ReferenceType.COUNTERPARTY,
-      code: 'CLIENT_GROUP_A',
-      name: 'Группа компаний А',
-      description: 'Головная компания группы',
-      value: 'GROUP_A',
-      isActive: true,
-      sortOrder: 0,
-      metadata: null,
-      parentCode: null,
-    },
-  })
-
-  await prisma.reference.create({
-    data: {
-      type: ReferenceType.COUNTERPARTY,
-      code: 'CLIENT_SUB_A1',
-      name: 'Дочерняя компания А1',
-      description: 'Дочерняя компания группы А',
-      value: 'SUB_A1',
-      isActive: true,
-      sortOrder: 0,
-      metadata: null,
-      parentCode: 'CLIENT_GROUP_A',
-    },
-  })
-
-  await prisma.reference.create({
-    data: {
-      type: ReferenceType.COUNTERPARTY,
-      code: 'CLIENT_SUB_A2',
-      name: 'Дочерняя компания А2',
-      description: 'Дочерняя компания группы А',
-      value: 'SUB_A2',
-      isActive: true,
-      sortOrder: 0,
-      metadata: null,
-      parentCode: 'CLIENT_GROUP_A',
-    },
-  })
 
   // Иерархия отделов
   await prisma.reference.create({

@@ -47,6 +47,12 @@ const navigation = [
     description: 'Центр уведомлений'
   },
   {
+    name: 'Контрагенты',
+    href: '/counterparties',
+    icon: Building,
+    description: 'Управление контрагентами'
+  },
+  {
     name: 'Договоры',
     href: '/contracts',
     icon: FileText,

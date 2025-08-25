@@ -49,7 +49,37 @@ export async function GET(request: NextRequest) {
       ]
     })
 
-    return NextResponse.json(references)
+    // Если запрашиваем контрагентов, добавляем информацию о договорах
+    let enhancedReferences = references
+    if (type === 'COUNTERPARTY') {
+      enhancedReferences = await Promise.all(references.map(async (ref) => {
+        const contractCount = await db.contract.count({
+          where: {
+            counterparty: ref.name
+          }
+        })
+        
+        const lastContract = await db.contract.findFirst({
+          where: {
+            counterparty: ref.name
+          },
+          orderBy: {
+            createdAt: 'desc'
+          },
+          select: {
+            createdAt: true
+          }
+        })
+
+        return {
+          ...ref,
+          contractCount,
+          lastContractDate: lastContract?.createdAt
+        }
+      }))
+    }
+
+    return NextResponse.json({ references: enhancedReferences })
   } catch (error) {
     console.error('Error fetching references:', error)
     return NextResponse.json(

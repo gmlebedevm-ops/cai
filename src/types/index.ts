@@ -217,4 +217,7 @@ export interface Reference {
   parentCode?: string | null
   children?: Reference[]
   parent?: Reference | null
+  // Дополнительные поля для контрагентов
+  contractCount?: number
+  lastContractDate?: Date
 }
