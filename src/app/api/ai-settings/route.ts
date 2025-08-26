@@ -435,25 +435,7 @@ async function testConnection() {
           let chatSuccess = false
           let lastError = null
           let workingEndpoint = null
-          
-          // Сначала проверяем базовый URL на доступность
-          try {
-            const baseUrl = new URL(settings.lmStudioUrl)
-            console.log(`Testing base URL: ${baseUrl.origin}`)
-            
-            const baseResponse = await fetch(`${baseUrl.origin}/`, {
-              method: 'GET',
-              signal: controller.signal,
-              timeout: 5000
-            })
-            
-            if (baseResponse.ok) {
-              console.log('LM Studio base URL is accessible')
-            }
-          } catch (baseError) {
-            console.warn('LM Studio base URL not accessible:', baseError)
-          }
-          
+                           
           // Проверяем каждый endpoint чата
           for (const chatEndpoint of chatEndpoints) {
             try {
