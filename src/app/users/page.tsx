@@ -29,7 +29,7 @@ import {
   Activity
 } from 'lucide-react'
 import { Department } from '@/types'
-import { User as UserType, UserRole } from '@/types/contract'
+import { User as UserType } from '@/types/contract'
 
 interface UserWithStats extends UserType {
   _count: {
@@ -37,6 +37,24 @@ interface UserWithStats extends UserType {
     comments: number
     approvals: number
   }
+  userRole?: {
+    id: string
+    name: string
+    description?: string
+  }
+  roleId?: string
+  departmentId?: string
+  department?: {
+    id: string
+    name: string
+  }
+}
+
+interface Role {
+  id: string
+  name: string
+  description?: string
+  isActive: boolean
 }
 
 interface UsersResponse {
@@ -49,16 +67,11 @@ interface UsersResponse {
   }
 }
 
-interface RoleOption {
-  value: UserRole
-  label: string
-  description: string
-}
-
 export default function UsersPage() {
   const [users, setUsers] = useState<UserWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [departments, setDepartments] = useState<Department[]>([])
+  const [roles, setRoles] = useState<Role[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('all')
   const [currentPage, setCurrentPage] = useState(1)
@@ -71,22 +84,39 @@ export default function UsersPage() {
   const [formData, setFormData] = useState({
     email: '',
     name: '',
-    role: UserRole.INITIATOR,
+    roleId: '',
     departmentId: 'null' as string | null
   })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  // Опции ролей
-  const roleOptions: RoleOption[] = [
-    { value: UserRole.INITIATOR, label: 'Инициатор', description: 'Создание договоров' },
-    { value: UserRole.INITIATOR_MANAGER, label: 'Менеджер инициаторов', description: 'Управление инициаторами' },
-    { value: UserRole.DEPARTMENT_HEAD, label: 'Руководитель отдела', description: 'Согласование договоров' },
-    { value: UserRole.CHIEF_LAWYER, label: 'Главный юрист', description: 'Юридическая экспертиза' },
-    { value: UserRole.GENERAL_DIRECTOR, label: 'Генеральный директор', description: 'Окончательное согласование' },
-    { value: UserRole.OFFICE_MANAGER, label: 'Офис-менеджер', description: 'Административная поддержка' },
-    { value: UserRole.ADMINISTRATOR, label: 'Администратор', description: 'Полный доступ' }
-  ]
+  const fetchRoles = async () => {
+    try {
+      const response = await fetch('/api/roles-management')
+      if (response.ok) {
+        const data = await response.json()
+        setRoles(data.roles)
+      } else {
+        console.error('Failed to fetch roles:', response.status)
+      }
+    } catch (error) {
+      console.error('Error fetching roles:', error)
+    }
+  }
+
+  const fetchDepartments = async () => {
+    try {
+      const response = await fetch('/api/departments')
+      if (response.ok) {
+        const data = await response.json()
+        setDepartments(data)
+      } else {
+        console.error('Failed to fetch departments:', response.status)
+      }
+    } catch (error) {
+      console.error('Error fetching departments:', error)
+    }
+  }
 
   const fetchUsers = async () => {
     try {
@@ -118,23 +148,10 @@ export default function UsersPage() {
     }
   }
 
-  const fetchDepartments = async () => {
-    try {
-      const response = await fetch('/api/departments')
-      if (response.ok) {
-        const data = await response.json()
-        setDepartments(data)
-      } else {
-        console.error('Failed to fetch departments:', response.status)
-      }
-    } catch (error) {
-      console.error('Error fetching departments:', error)
-    }
-  }
-
   useEffect(() => {
     fetchUsers()
     fetchDepartments()
+    fetchRoles()
   }, [currentPage, searchTerm, roleFilter])
 
   useEffect(() => {
@@ -154,8 +171,8 @@ export default function UsersPage() {
       const submitData = {
         email: formData.email,
         name: formData.name,
-        role: formData.role,
-        ...(editingUser && { departmentId: formData.departmentId === 'null' ? null : formData.departmentId })
+        roleId: formData.roleId,
+        departmentId: formData.departmentId === 'null' ? null : formData.departmentId
       }
 
       const response = await fetch(url, {
@@ -187,7 +204,7 @@ export default function UsersPage() {
     setFormData({
       email: user.email,
       name: user.name || '',
-      role: user.role,
+      roleId: user.roleId || user.userRole?.id || '',
       departmentId: user.department?.id || 'null'
     })
     setIsDialogOpen(true)
@@ -220,21 +237,21 @@ export default function UsersPage() {
     setFormData({
       email: '',
       name: '',
-      role: UserRole.INITIATOR,
+      roleId: '',
       departmentId: 'null'
     })
     setError('')
   }
 
-  const getRoleBadgeVariant = (role: UserRole) => {
-    switch (role) {
-      case UserRole.ADMINISTRATOR:
+  const getRoleBadgeVariant = (roleName: string) => {
+    switch (roleName) {
+      case 'Администратор':
         return 'destructive'
-      case UserRole.GENERAL_DIRECTOR:
+      case 'Генеральный директор':
         return 'default'
-      case UserRole.CHIEF_LAWYER:
+      case 'Главный юрист':
         return 'secondary'
-      case UserRole.DEPARTMENT_HEAD:
+      case 'Руководитель отдела':
         return 'outline'
       default:
         return 'secondary'
@@ -343,16 +360,18 @@ export default function UsersPage() {
                   </h4>
                   <div className="space-y-2">
                     <Label htmlFor="role">Роль в системе *</Label>
-                    <Select value={formData.role} onValueChange={(value) => setFormData(prev => ({ ...prev, role: value as UserRole }))}>
+                    <Select value={formData.roleId} onValueChange={(value) => setFormData(prev => ({ ...prev, roleId: value }))}>
                       <SelectTrigger>
                         <SelectValue placeholder="Выберите роль" />
                       </SelectTrigger>
                       <SelectContent>
-                        {roleOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
+                        {roles.map((role) => (
+                          <SelectItem key={role.id} value={role.id}>
                             <div className="flex flex-col">
-                              <div className="font-medium">{option.label}</div>
-                              <div className="text-xs text-muted-foreground">{option.description}</div>
+                              <div className="font-medium">{role.name}</div>
+                              {role.description && (
+                                <div className="text-xs text-muted-foreground">{role.description}</div>
+                              )}
                             </div>
                           </SelectItem>
                         ))}
@@ -361,37 +380,35 @@ export default function UsersPage() {
                   </div>
                 </div>
 
-                {/* Отдел (только для редактирования) */}
-                {editingUser && (
-                  <>
-                    <Separator />
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-medium flex items-center gap-2">
-                        <Building2 className="h-4 w-4" />
-                        Организационная структура
-                      </h4>
-                      <div className="space-y-2">
-                        <Label htmlFor="department">Отдел</Label>
-                        <Select 
-                          value={formData.departmentId} 
-                          onValueChange={(value) => setFormData(prev => ({ ...prev, departmentId: value }))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Выберите отдел" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="null">Без отдела</SelectItem>
-                            {departments.map((dept) => (
-                              <SelectItem key={dept.id} value={dept.id}>
-                                {dept.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                {/* Отдел */}
+                <>
+                  <Separator />
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-medium flex items-center gap-2">
+                      <Building2 className="h-4 w-4" />
+                      Организационная структура
+                    </h4>
+                    <div className="space-y-2">
+                      <Label htmlFor="department">Отдел</Label>
+                      <Select 
+                        value={formData.departmentId} 
+                        onValueChange={(value) => setFormData(prev => ({ ...prev, departmentId: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Выберите отдел" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="null">Без отдела</SelectItem>
+                          {departments.map((dept) => (
+                            <SelectItem key={dept.id} value={dept.id}>
+                              {dept.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                  </>
-                )}
+                  </div>
+                </>
 
                 {/* Статистика (только для редактирования) */}
                 {editingUser && (
@@ -495,9 +512,9 @@ export default function UsersPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Все роли</SelectItem>
-                {roleOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
+                {roles.map((role) => (
+                  <SelectItem key={role.id} value={role.id}>
+                    {role.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -544,8 +561,8 @@ export default function UsersPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={getRoleBadgeVariant(user.role)}>
-                            {roleOptions.find(r => r.value === user.role)?.label || user.role}
+                          <Badge variant={getRoleBadgeVariant(user.userRole?.name || user.role)}>
+                            {user.userRole?.name || user.role}
                           </Badge>
                         </TableCell>
                         <TableCell>

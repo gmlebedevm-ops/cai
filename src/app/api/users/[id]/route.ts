@@ -13,6 +13,21 @@ export async function GET(
         email: true,
         name: true,
         role: true,
+        roleId: true,
+        userRole: {
+          select: {
+            id: true,
+            name: true,
+            description: true
+          }
+        },
+        departmentId: true,
+        department: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
         createdAt: true,
         updatedAt: true,
         _count: {
@@ -49,9 +64,9 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { email, name, role } = await request.json()
+    const { email, name, roleId, departmentId } = await request.json()
 
-    if (!email || !role) {
+    if (!email || !roleId) {
       return NextResponse.json(
         { error: 'Email и роль обязательны' },
         { status: 400 }
@@ -84,19 +99,47 @@ export async function PUT(
       }
     }
 
+    // Проверяем, существует ли роль
+    const role = await db.role.findUnique({
+      where: { id: roleId }
+    })
+
+    if (!role) {
+      return NextResponse.json(
+        { error: 'Указанная роль не существует' },
+        { status: 400 }
+      )
+    }
+
     // Обновляем пользователя
     const updatedUser = await db.user.update({
       where: { id: params.id },
       data: {
         email,
         name: name || null,
-        role
+        roleId,
+        departmentId: departmentId || null
       },
       select: {
         id: true,
         email: true,
         name: true,
         role: true,
+        roleId: true,
+        userRole: {
+          select: {
+            id: true,
+            name: true,
+            description: true
+          }
+        },
+        departmentId: true,
+        department: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
         createdAt: true,
         updatedAt: true
       }
