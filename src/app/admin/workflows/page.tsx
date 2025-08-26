@@ -222,12 +222,20 @@ export default function WorkflowsPage() {
 
   const openEditDialog = (workflow: Workflow) => {
     setSelectedWorkflow(workflow)
+    
+    // Инициализируем шаги с полями для параллельного согласования
+    const initializedSteps = (workflow.steps || []).map(step => ({
+      ...step,
+      isParallel: step.parallelRoles && step.parallelRoles.length > 0,
+      parallelRoleIds: step.parallelRoles?.map(pr => pr.roleId) || []
+    }))
+    
     setFormData({
       name: workflow.name,
       description: workflow.description || '',
       status: workflow.status,
       conditions: workflow.conditions || '',
-      steps: workflow.steps || []
+      steps: initializedSteps
     })
     setEditDialogOpen(true)
   }
@@ -244,8 +252,13 @@ export default function WorkflowsPage() {
           conditions: '',
           isRequired: true,
           dueDays: 3,
+          // Старая система ролей (для обратной совместимости)
           role: undefined,
-          userId: undefined
+          userId: undefined,
+          // Новая система ролей
+          roleId: undefined,
+          isParallel: false,
+          parallelRoleIds: []
         }
       ]
     }))

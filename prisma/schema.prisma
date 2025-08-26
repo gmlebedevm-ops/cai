@@ -159,6 +159,8 @@ model Role {
   // Relations
   permissions RolePermission[]
   users       User[]
+  workflowSteps WorkflowStepRole[] @relation("RoleWorkflowSteps")
+  singleWorkflowSteps WorkflowStep[] @relation("WorkflowStepSingleRole")
 }
 
 model Department {
@@ -384,8 +386,18 @@ model WorkflowStep {
   conditions  String?          // JSON с условиями для шага
   isRequired  Boolean          @default(true)
   dueDays     Int?             // Количество дней на выполнение
+  
+  // Старая система ролей (для обратной совместимости)
   role        UserRole?        // Роль, которая должна выполнить шаг
   userId      String?          // Конкретный пользователь, если нужен
+  
+  // Новая система ролей
+  roleId      String?          // ID роли из новой системы
+  roleData    Role?            @relation("WorkflowStepSingleRole", fields: [roleId], references: [id])
+  
+  // Для параллельного согласования
+  parallelRoles WorkflowStepRole[] @relation("WorkflowStepParallelRoles")
+  
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   
@@ -394,6 +406,20 @@ model WorkflowStep {
   workflow    Workflow         @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   
   approvals   Approval[]
+}
+
+// Таблица для связи многих ролей с одним шагом (параллельное согласование)
+model WorkflowStepRole {
+  id          String   @id @default(cuid())
+  stepId      String
+  roleId      String
+  createdAt   DateTime @default(now())
+  
+  // Relations
+  step        WorkflowStep @relation("WorkflowStepParallelRoles", fields: [stepId], references: [id], onDelete: Cascade)
+  role        Role         @relation("RoleWorkflowSteps", fields: [roleId], references: [id], onDelete: Cascade)
+  
+  @@unique([stepId, roleId])
 }
 
 // Reference Models

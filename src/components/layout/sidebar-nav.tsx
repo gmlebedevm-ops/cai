@@ -27,7 +27,9 @@ import {
   MessageSquare,
   ChevronDown,
   ChevronRight,
-  Bot
+  Bot,
+  LayoutPanelTop,
+  Columns3Cog
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -113,7 +115,6 @@ const navigation = [
       { name: 'Все пользователи', href: '/users', icon: Users },
       { name: 'Роли и права', href: '/users/roles', icon: UserCheck },
       { name: 'Компания', href: '/users/company', icon: Building2 },
-      { name: 'Структура компании', href: '/company-structure', icon: Building2 },
     ]
   },
   {
@@ -125,12 +126,13 @@ const navigation = [
   {
     name: 'Администрирование',
     href: '/admin',
-    icon: Settings,
+    icon: Columns3Cog,
     description: 'Администрирование системы',
     children: [
       { name: 'Настройки AI', href: '/admin/ai-settings', icon: Bot },
       { name: 'Маршруты согласования', href: '/admin/workflows', icon: Waypoints },
       { name: 'Справочники', href: '/admin/references', icon: BookText },
+      { name: 'Структура компании', href: '/company-structure', icon: LayoutPanelTop },
       { name: 'Интеграции', href: '/admin/integrations', icon: Blocks },
     ]
   },

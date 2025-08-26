@@ -1,3 +1,6 @@
+import { UserRole } from './contract'
+import { PermissionType } from './index'
+
 export enum WorkflowStatus {
   ACTIVE = 'ACTIVE',
   INACTIVE = 'INACTIVE',
@@ -44,13 +47,67 @@ export interface WorkflowStep {
   conditions?: string
   isRequired: boolean
   dueDays?: number
+  
+  // Старая система ролей (для обратной совместимости)
   role?: UserRole
   userId?: string
+  
+  // Новая система ролей
+  roleId?: string
+  roleData?: Role
+  
+  // Для параллельного согласования
+  isParallel?: boolean
+  parallelRoleIds?: string[]
+  parallelRoles?: WorkflowStepRole[]
+  
   createdAt: Date
   updatedAt: Date
   workflowId: string
   workflow?: Workflow
   approvals?: Approval[]
+}
+
+// Интерфейс для связи шага с ролями (параллельное согласование)
+export interface WorkflowStepRole {
+  id: string
+  stepId: string
+  roleId: string
+  createdAt: Date
+  step?: WorkflowStep
+  role?: Role
+}
+
+// Интерфейс для новой системы ролей
+export interface Role {
+  id: string
+  name: string
+  description?: string
+  isActive: boolean
+  createdAt: Date
+  updatedAt: Date
+  permissions?: RolePermission[]
+  users?: User[]
+  workflowSteps?: WorkflowStepRole[]
+  singleWorkflowSteps?: WorkflowStep[]
+}
+
+export interface RolePermission {
+  id: string
+  roleId: string
+  permissionId: string
+  createdAt: Date
+  role?: Role
+  permission?: Permission
+}
+
+export interface Permission {
+  id: string
+  type: PermissionType
+  name: string
+  description?: string
+  createdAt: Date
+  updatedAt: Date
 }
 
 export interface Reference {

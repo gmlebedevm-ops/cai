@@ -13,6 +13,14 @@ export async function GET(
         steps: {
           orderBy: {
             order: 'asc'
+          },
+          include: {
+            roleData: true,
+            parallelRoles: {
+              include: {
+                role: true
+              }
+            }
           }
         },
         contracts: {
@@ -77,6 +85,14 @@ export async function PUT(
         steps: {
           orderBy: {
             order: 'asc'
+          },
+          include: {
+            roleData: true,
+            parallelRoles: {
+              include: {
+                role: true
+              }
+            }
           }
         }
       }
@@ -84,13 +100,21 @@ export async function PUT(
 
     // Если предоставлены шаги, обновляем их
     if (steps) {
-      // Удаляем существующие шаги
+      // Удаляем существующие шаги и связи для параллельного согласования
+      await db.workflowStepRole.deleteMany({
+        where: {
+          step: {
+            workflowId: id
+          }
+        }
+      })
+      
       await db.workflowStep.deleteMany({
         where: { workflowId: id }
       })
 
       // Создаем новые шаги
-      await db.workflowStep.createMany({
+      const createdSteps = await db.workflowStep.createMany({
         data: steps.map((step: any, index: number) => ({
           workflowId: id,
           name: step.name,
@@ -100,19 +124,52 @@ export async function PUT(
           conditions: step.conditions,
           isRequired: step.isRequired ?? true,
           dueDays: step.dueDays,
+          // Старая система ролей (для обратной совместимости)
           role: step.role,
-          userId: step.userId
+          userId: step.userId,
+          // Новая система ролей
+          roleId: step.roleId
         }))
       })
+
+      // Получаем созданные шаги для создания связей
+      const workflowSteps = await db.workflowStep.findMany({
+        where: { workflowId: id },
+        orderBy: { order: 'asc' }
+      })
+
+      // Создаем связи для параллельного согласования
+      for (let i = 0; i < steps.length; i++) {
+        const step = steps[i]
+        const workflowStep = workflowSteps[i]
+
+        // Если есть параллельные роли, создаем связи
+        if (step.parallelRoleIds && step.parallelRoleIds.length > 0) {
+          await db.workflowStepRole.createMany({
+            data: step.parallelRoleIds.map((roleId: string) => ({
+              stepId: workflowStep.id,
+              roleId
+            }))
+          })
+        }
+      }
     }
 
-    // Получаем обновленный workflow с шагами
+    // Получаем обновленный workflow с шагами и связями
     const updatedWorkflow = await db.workflow.findUnique({
       where: { id },
       include: {
         steps: {
           orderBy: {
             order: 'asc'
+          },
+          include: {
+            roleData: true,
+            parallelRoles: {
+              include: {
+                role: true
+              }
+            }
           }
         }
       }
@@ -156,6 +213,21 @@ export async function DELETE(
       )
     }
 
+    // Удаляем связи для параллельного согласования
+    await db.workflowStepRole.deleteMany({
+      where: {
+        step: {
+          workflowId: id
+        }
+      }
+    })
+
+    // Удаляем шаги
+    await db.workflowStep.deleteMany({
+      where: { workflowId: id }
+    })
+
+    // Удаляем workflow
     await db.workflow.delete({
       where: { id }
     })

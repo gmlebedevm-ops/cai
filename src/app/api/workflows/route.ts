@@ -24,6 +24,14 @@ export async function GET(request: NextRequest) {
         steps: {
           orderBy: {
             order: 'asc'
+          },
+          include: {
+            roleData: true,
+            parallelRoles: {
+              include: {
+                role: true
+              }
+            }
           }
         },
         contracts: {
@@ -73,16 +81,24 @@ export async function POST(request: NextRequest) {
         conditions,
         isDefault,
         steps: {
-          create: steps.map((step: any, index: number) => ({
-            name: step.name,
-            type: step.type,
-            order: index + 1,
-            description: step.description,
-            conditions: step.conditions,
-            isRequired: step.isRequired ?? true,
-            dueDays: step.dueDays,
-            role: step.role,
-            userId: step.userId
+          create: await Promise.all(steps.map(async (step: any, index: number) => {
+            // Создаем базовый шаг
+            const stepData: any = {
+              name: step.name,
+              type: step.type,
+              order: index + 1,
+              description: step.description,
+              conditions: step.conditions,
+              isRequired: step.isRequired ?? true,
+              dueDays: step.dueDays,
+              // Старая система ролей (для обратной совместимости)
+              role: step.role,
+              userId: step.userId,
+              // Новая система ролей
+              roleId: step.roleId
+            }
+
+            return stepData
           }))
         }
       },
@@ -90,12 +106,56 @@ export async function POST(request: NextRequest) {
         steps: {
           orderBy: {
             order: 'asc'
+          },
+          include: {
+            roleData: true,
+            parallelRoles: {
+              include: {
+                role: true
+              }
+            }
           }
         }
       }
     })
 
-    return NextResponse.json(workflow, { status: 201 })
+    // Теперь создаем связи для параллельного согласования
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i]
+      const workflowStep = workflow.steps[i]
+
+      // Если есть параллельные роли, создаем связи
+      if (step.parallelRoleIds && step.parallelRoleIds.length > 0) {
+        await db.workflowStepRole.createMany({
+          data: step.parallelRoleIds.map((roleId: string) => ({
+            stepId: workflowStep.id,
+            roleId
+          }))
+        })
+      }
+    }
+
+    // Получаем обновленный workflow с связями для параллельного согласования
+    const updatedWorkflow = await db.workflow.findUnique({
+      where: { id: workflow.id },
+      include: {
+        steps: {
+          orderBy: {
+            order: 'asc'
+          },
+          include: {
+            roleData: true,
+            parallelRoles: {
+              include: {
+                role: true
+              }
+            }
+          }
+        }
+      }
+    })
+
+    return NextResponse.json(updatedWorkflow, { status: 201 })
   } catch (error) {
     console.error('Error creating workflow:', error)
     return NextResponse.json(

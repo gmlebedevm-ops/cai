@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Checkbox } from '@/components/ui/checkbox'
 import { 
   Plus, 
   Edit, 
@@ -34,10 +35,22 @@ import {
   ArrowRight,
   Info,
   HelpCircle,
-  Sparkles
+  Sparkles,
+  Users2
 } from 'lucide-react'
 import { Workflow, WorkflowStep, WorkflowStatus, WorkflowStepType, CreateWorkflowInput } from '@/types/workflow'
 import { UserRole } from '@/types/contract'
+
+// Интерфейс для роли из API
+interface Role {
+  id: string
+  name: string
+  description?: string
+  isActive: boolean
+  _count?: {
+    users: number
+  }
+}
 
 const statusColors = {
   [WorkflowStatus.ACTIVE]: 'bg-green-500',
@@ -143,6 +156,52 @@ export default function EnhancedWorkflowForm({
   const [previewMode, setPreviewMode] = useState(mode === 'edit' ? false : false)
   const [selectedTemplate, setSelectedTemplate] = useState<string>(initialSelectedTemplate || (mode === 'edit' ? 'custom' : ''))
   const [activeTab, setActiveTab] = useState(mode === 'edit' ? 'basic' : 'basic')
+  const [roles, setRoles] = useState<Role[]>([])
+  const [loadingRoles, setLoadingRoles] = useState(true)
+
+  // Загрузка ролей из API
+  useEffect(() => {
+    const fetchRoles = async () => {
+      try {
+        const response = await fetch('/api/roles-management?includePermissions=false')
+        if (response.ok) {
+          const data = await response.json()
+          setRoles(data.roles || [])
+        }
+      } catch (error) {
+        console.error('Error fetching roles:', error)
+      } finally {
+        setLoadingRoles(false)
+      }
+    }
+
+    fetchRoles()
+  }, [])
+
+  // Эффект для инициализации полей параллельного согласования при загрузке данных
+  useEffect(() => {
+    if (formData.steps && formData.steps.length > 0) {
+      const updatedSteps = formData.steps.map(step => ({
+        ...step,
+        isParallel: step.parallelRoles && step.parallelRoles.length > 0,
+        parallelRoleIds: step.parallelRoles?.map(pr => pr.roleId) || []
+      }))
+      
+      // Проверяем, нужно ли обновить состояние
+      const needsUpdate = updatedSteps.some((step, index) => {
+        const originalStep = formData.steps[index]
+        return step.isParallel !== originalStep.isParallel || 
+               JSON.stringify(step.parallelRoleIds) !== JSON.stringify(originalStep.parallelRoleIds)
+      })
+      
+      if (needsUpdate) {
+        setFormData(prev => ({
+          ...prev,
+          steps: updatedSteps
+        }))
+      }
+    }
+  }, [formData.steps])
 
   // Эффект для автоматического переключения на вкладку предпросмотра
   useEffect(() => {
@@ -200,7 +259,9 @@ export default function EnhancedWorkflowForm({
     return formData.steps.every(step => 
       step.name.trim() && 
       step.type && 
-      (step.type !== WorkflowStepType.APPROVAL || step.role)
+      (step.type !== WorkflowStepType.APPROVAL || 
+        step.roleId || 
+        (step.isParallel && step.parallelRoleIds && step.parallelRoleIds.length > 0))
     )
   }
 
@@ -215,8 +276,10 @@ export default function EnhancedWorkflowForm({
       errors.push('Тип шага обязателен')
     }
     
-    if (step.type === WorkflowStepType.APPROVAL && !step.role) {
-      errors.push('Для согласования необходимо указать роль')
+    if (step.type === WorkflowStepType.APPROVAL) {
+      if (!step.roleId && (!step.isParallel || !step.parallelRoleIds || step.parallelRoleIds.length === 0)) {
+        errors.push('Для согласования необходимо указать хотя бы одну роль')
+      }
     }
     
     return errors
@@ -552,27 +615,6 @@ export default function EnhancedWorkflowForm({
                           </Select>
                         </div>
                         
-                        {step.type === WorkflowStepType.APPROVAL && (
-                          <div className="space-y-2">
-                            <Label>Роль согласующего *</Label>
-                            <Select 
-                              value={step.role || ''} 
-                              onValueChange={(value) => updateStep(index, 'role', value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Выберите роль" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {Object.entries(roleLabels).map(([key, label]) => (
-                                  <SelectItem key={key} value={key}>
-                                    {label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
-                        
                         <div className="space-y-2">
                           <Label>Дней на выполнение</Label>
                           <Input
@@ -582,18 +624,6 @@ export default function EnhancedWorkflowForm({
                             value={step.dueDays || ''}
                             onChange={(e) => updateStep(index, 'dueDays', parseInt(e.target.value) || undefined)}
                             placeholder="3"
-                          />
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Описание шага</Label>
-                          <Textarea
-                            value={step.description}
-                            onChange={(e) => updateStep(index, 'description', e.target.value)}
-                            placeholder="Опишите, что нужно сделать на этом шаге"
-                            rows={2}
                           />
                         </div>
                         
@@ -608,6 +638,125 @@ export default function EnhancedWorkflowForm({
                           <p className="text-xs text-muted-foreground">
                             Если шаг не обязателен, процесс может продолжиться без его выполнения
                           </p>
+                        </div>
+                      </div>
+                      
+                      {step.type === WorkflowStepType.APPROVAL && (
+                        <div className="space-y-4 border-t pt-4">
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-base font-medium">Настройки согласования</Label>
+                              <div className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`parallel-${index}`}
+                                  checked={step.isParallel || false}
+                                  onCheckedChange={(checked) => {
+                                    // При переключении режима очищаем соответствующие поля
+                                    if (checked) {
+                                      // Включаем параллельное согласование - очищаем roleId
+                                      updateStep(index, 'roleId', undefined)
+                                    } else {
+                                      // Отключаем параллельное согласование - очищаем parallelRoleIds
+                                      updateStep(index, 'parallelRoleIds', [])
+                                    }
+                                    updateStep(index, 'isParallel', checked)
+                                  }}
+                                />
+                                <Label htmlFor={`parallel-${index}`} className="text-sm font-normal">
+                                  Параллельное согласование
+                                </Label>
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label>Роль согласующего *</Label>
+                              
+                              {loadingRoles ? (
+                                <div className="flex items-center justify-center h-10 border rounded-md">
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                                </div>
+                              ) : step.isParallel ? (
+                                // Параллельное согласование - выбор нескольких ролей
+                                <div className="space-y-2">
+                                  <div className="border rounded-md p-3 max-h-40 overflow-y-auto bg-muted/30">
+                                    <div className="space-y-2">
+                                      {roles.filter(role => role.isActive).map((role) => (
+                                        <div key={role.id} className="flex items-center space-x-2 py-1 hover:bg-muted/50 rounded px-1">
+                                          <Checkbox
+                                            id={`role-${index}-${role.id}`}
+                                            checked={step.parallelRoleIds?.includes(role.id) || false}
+                                            onCheckedChange={(checked) => {
+                                              const currentIds = step.parallelRoleIds || []
+                                              const newIds = checked 
+                                                ? [...currentIds, role.id]
+                                                : currentIds.filter(id => id !== role.id)
+                                              updateStep(index, 'parallelRoleIds', newIds)
+                                            }}
+                                          />
+                                          <div className="flex-1">
+                                            <Label htmlFor={`role-${index}-${role.id}`} className="text-sm cursor-pointer font-medium">
+                                              {role.name}
+                                            </Label>
+                                            {role.description && (
+                                              <p className="text-xs text-muted-foreground mt-0.5">{role.description}</p>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                  {(step.parallelRoleIds?.length || 0) === 0 && (
+                                    <div className="flex items-center gap-2 text-amber-600 bg-amber-50 p-2 rounded-md">
+                                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                                      <p className="text-xs">Выберите хотя бы одну роль для согласования</p>
+                                    </div>
+                                  )}
+                                  {(step.parallelRoleIds?.length || 0) > 0 && (
+                                    <div className="flex items-center gap-2 text-green-600 bg-green-50 p-2 rounded-md">
+                                      <CheckCircle className="h-4 w-4 flex-shrink-0" />
+                                      <p className="text-xs">
+                                        Выбрано ролей: {step.parallelRoleIds?.length}
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                // Одиночное согласование - выбор одной роли
+                                <Select 
+                                  value={step.roleId || ''} 
+                                  onValueChange={(value) => updateStep(index, 'roleId', value)}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Выберите роль для согласования" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {roles.filter(role => role.isActive).map((role) => (
+                                      <SelectItem key={role.id} value={role.id}>
+                                        <div className="py-1">
+                                          <div className="font-medium">{role.name}</div>
+                                          {role.description && (
+                                            <div className="text-xs text-muted-foreground mt-0.5">{role.description}</div>
+                                          )}
+                                        </div>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="grid grid-cols-1 gap-4">
+                        <div className="space-y-2">
+                          <Label>Описание шага</Label>
+                          <Textarea
+                            value={step.description}
+                            onChange={(e) => updateStep(index, 'description', e.target.value)}
+                            placeholder="Опишите, что нужно сделать на этом шаге"
+                            rows={2}
+                          />
                         </div>
                       </div>
                     </CardContent>
