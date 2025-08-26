@@ -178,31 +178,6 @@ export default function EnhancedWorkflowForm({
     fetchRoles()
   }, [])
 
-  // Эффект для инициализации полей параллельного согласования при загрузке данных
-  useEffect(() => {
-    if (formData.steps && formData.steps.length > 0) {
-      const updatedSteps = formData.steps.map(step => ({
-        ...step,
-        isParallel: step.parallelRoles && step.parallelRoles.length > 0,
-        parallelRoleIds: step.parallelRoles?.map(pr => pr.roleId) || []
-      }))
-      
-      // Проверяем, нужно ли обновить состояние
-      const needsUpdate = updatedSteps.some((step, index) => {
-        const originalStep = formData.steps[index]
-        return step.isParallel !== originalStep.isParallel || 
-               JSON.stringify(step.parallelRoleIds) !== JSON.stringify(originalStep.parallelRoleIds)
-      })
-      
-      if (needsUpdate) {
-        setFormData(prev => ({
-          ...prev,
-          steps: updatedSteps
-        }))
-      }
-    }
-  }, [formData.steps])
-
   // Эффект для автоматического переключения на вкладку предпросмотра
   useEffect(() => {
     if (previewMode) {
@@ -650,17 +625,7 @@ export default function EnhancedWorkflowForm({
                                 <Checkbox
                                   id={`parallel-${index}`}
                                   checked={step.isParallel || false}
-                                  onCheckedChange={(checked) => {
-                                    // При переключении режима очищаем соответствующие поля
-                                    if (checked) {
-                                      // Включаем параллельное согласование - очищаем roleId
-                                      updateStep(index, 'roleId', undefined)
-                                    } else {
-                                      // Отключаем параллельное согласование - очищаем parallelRoleIds
-                                      updateStep(index, 'parallelRoleIds', [])
-                                    }
-                                    updateStep(index, 'isParallel', checked)
-                                  }}
+                                  onCheckedChange={(checked) => updateStep(index, 'isParallel', checked)}
                                 />
                                 <Label htmlFor={`parallel-${index}`} className="text-sm font-normal">
                                   Параллельное согласование
