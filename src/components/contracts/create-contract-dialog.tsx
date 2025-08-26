@@ -127,13 +127,15 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess }: CreateCo
   const onSubmit = async (values: FormValues, action: 'draft' | 'submit') => {
     setLoading(true)
     try {
-      // Для демо используем фиксированный ID пользователя
-      const initiatorId = 'demo-user-id'
+      // Используем реального пользователя-инициатора из базы данных
+      const initiatorId = 'cmeqycf4k0000ozebvt1u5lov' // ID пользователя initiator@test.com
 
       const contractData = {
         ...values,
         initiatorId,
         amount: parseFloat(values.amount),
+        startDate: values.startDate.toISOString(),
+        endDate: values.endDate.toISOString(),
         status: action === 'draft' ? 'DRAFT' : 'IN_REVIEW',
         workflowId: values.workflowId || null,
       }
@@ -166,13 +168,16 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess }: CreateCo
             : 'Договор создан и отправлен на согласование',
         })
       } else {
-        throw new Error('Failed to create contract')
+        const errorData = await response.json()
+        console.error('Server error:', errorData)
+        throw new Error(errorData.error || 'Failed to create contract')
       }
     } catch (error) {
       console.error('Error creating contract:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Не удалось создать договор'
       toast({
         title: 'Ошибка',
-        description: 'Не удалось создать договор',
+        description: errorMessage,
         variant: 'destructive',
       })
     } finally {

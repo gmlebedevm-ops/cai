@@ -272,7 +272,7 @@ export async function POST(request: NextRequest) {
     const timeoutId = setTimeout(() => {
       console.log('AI request timeout reached, aborting...')
       controller.abort()
-    }, 60000)
+    }, 360000)
     
     try {
       for (const url of urlsToTry) {

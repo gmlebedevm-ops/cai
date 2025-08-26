@@ -346,6 +346,25 @@ export default function AIChatPage() {
 
   const loadContractData = async (contractId: string) => {
     try {
+      console.log('Loading contract data for:', contractId)
+      // Используем специальный API для получения полного контекста договора
+      const response = await fetch(`/api/ai-assistant/context?contractId=${contractId}`)
+      console.log('Contract context response status:', response.status)
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Contract context response not ok:', response.status, errorText)
+        throw new Error(`HTTP ${response.status}: ${errorText}`)
+      }
+      
+      const contextData = await response.json()
+      console.log('Contract context loaded:', contextData)
+      
+      setContractData(contextData)
+      loadSessions() // Перезагружаем сессии чата для нового договора
+    } catch (error) {
+      console.error('Error loading contract data:', error)
+      // В случае ошибки используем базовые данные из списка договоров
       const contract = contracts.find(c => c.id === contractId)
       if (contract) {
         setContractData({
@@ -363,10 +382,7 @@ export default function AIChatPage() {
           },
           policies: []
         })
-        loadSessions()
       }
-    } catch (error) {
-      console.error('Error loading contract data:', error)
     }
   }
 

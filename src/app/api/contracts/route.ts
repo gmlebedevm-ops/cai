@@ -162,6 +162,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validate and parse dates
+    let parsedStartDate, parsedEndDate
+    try {
+      parsedStartDate = new Date(startDate)
+      parsedEndDate = new Date(endDate)
+      
+      if (isNaN(parsedStartDate.getTime()) || isNaN(parsedEndDate.getTime())) {
+        return NextResponse.json(
+          { error: 'Invalid date format' },
+          { status: 400 }
+        )
+      }
+    } catch (error) {
+      return NextResponse.json(
+        { error: 'Invalid date format' },
+        { status: 400 }
+      )
+    }
+
     // Get or create demo user if initiatorId not provided
     let user
     if (initiatorId) {
@@ -184,8 +203,8 @@ export async function POST(request: NextRequest) {
         number,
         counterparty,
         amount: parseFloat(amount),
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
+        startDate: parsedStartDate,
+        endDate: parsedEndDate,
         initiatorId: user.id,
         status,
         workflowId
@@ -217,8 +236,8 @@ export async function POST(request: NextRequest) {
           number,
           counterparty,
           amount,
-          startDate,
-          endDate,
+          startDate: parsedStartDate.toISOString(),
+          endDate: parsedEndDate.toISOString(),
           description,
           status,
           workflowId
@@ -230,6 +249,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(contract, { status: 201 })
   } catch (error) {
     console.error('Error creating contract:', error)
+    if (error instanceof Error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      )
+    }
     return NextResponse.json(
       { error: 'Failed to create contract' },
       { status: 500 }
