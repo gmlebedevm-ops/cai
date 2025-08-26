@@ -100,9 +100,28 @@ async function getOrCreateAISettings() {
 
 // Функция для преобразования настроек из базы данных в формат API
 function formatAISettings(dbSettings: any): AISettings {
+  // Преобразуем провайдер из формата БД в формат API
+  let provider: 'lm-studio' | 'z-ai' | 'openai' | 'anthropic'
+  switch (dbSettings.provider) {
+    case 'LM_STUDIO':
+      provider = 'lm-studio'
+      break
+    case 'Z_AI':
+      provider = 'z-ai'
+      break
+    case 'OPENAI':
+      provider = 'openai'
+      break
+    case 'ANTHROPIC':
+      provider = 'anthropic'
+      break
+    default:
+      provider = 'lm-studio' // значение по умолчанию
+  }
+  
   return {
     id: dbSettings.id,
-    provider: dbSettings.provider.toLowerCase() as any,
+    provider,
     lmStudioUrl: dbSettings.lmStudioUrl,
     apiKey: dbSettings.apiKey,
     defaultModel: dbSettings.defaultModel,
