@@ -3,11 +3,12 @@ import { db } from '@/lib/db'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const workflow = await db.workflow.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         steps: {
           orderBy: {
@@ -44,14 +45,15 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const body = await request.json()
     const { name, description, status, conditions, steps } = body
 
     const existingWorkflow = await db.workflow.findUnique({
-      where: { id: params.id }
+      where: { id }
     })
 
     if (!existingWorkflow) {
@@ -69,7 +71,7 @@ export async function PUT(
     if (conditions !== undefined) updateData.conditions = conditions
 
     const workflow = await db.workflow.update({
-      where: { id: params.id },
+      where: { id },
       data: updateData,
       include: {
         steps: {
@@ -84,13 +86,13 @@ export async function PUT(
     if (steps) {
       // Удаляем существующие шаги
       await db.workflowStep.deleteMany({
-        where: { workflowId: params.id }
+        where: { workflowId: id }
       })
 
       // Создаем новые шаги
       await db.workflowStep.createMany({
         data: steps.map((step: any, index: number) => ({
-          workflowId: params.id,
+          workflowId: id,
           name: step.name,
           type: step.type,
           order: index + 1,
@@ -106,7 +108,7 @@ export async function PUT(
 
     // Получаем обновленный workflow с шагами
     const updatedWorkflow = await db.workflow.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         steps: {
           orderBy: {
@@ -128,11 +130,12 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const existingWorkflow = await db.workflow.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         contracts: true
       }
@@ -154,7 +157,7 @@ export async function DELETE(
     }
 
     await db.workflow.delete({
-      where: { id: params.id }
+      where: { id }
     })
 
     return NextResponse.json({ message: 'Workflow deleted successfully' })

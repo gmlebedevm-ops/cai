@@ -3,11 +3,12 @@ import { db } from '@/lib/db'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const contract = await db.contract.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         initiator: {
           select: {
@@ -102,9 +103,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const body = await request.json()
     const { status, number, counterparty, amount, startDate, endDate } = body
 
@@ -117,7 +119,7 @@ export async function PUT(
     if (endDate !== undefined) updateData.endDate = new Date(endDate)
 
     const contract = await db.contract.update({
-      where: { id: params.id },
+      where: { id },
       data: updateData,
       include: {
         initiator: {
@@ -131,12 +133,12 @@ export async function PUT(
       }
     })
 
-    // Create contract history entry
+      // Create contract history entry
     await db.contractHistory.create({
       data: {
         action: 'CONTRACT_UPDATED',
         details: JSON.stringify(updateData),
-        contractId: params.id
+        contractId: id
       }
     })
 

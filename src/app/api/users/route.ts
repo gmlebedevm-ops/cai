@@ -40,8 +40,7 @@ export async function GET(request: NextRequest) {
           department: {
             select: {
               id: true,
-              name: true,
-              code: true
+              name: true
             }
           },
           // Считаем связанные сущности для статистики

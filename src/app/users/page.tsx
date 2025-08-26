@@ -99,12 +99,18 @@ export default function UsersPage() {
       })
 
       const response = await fetch(`/api/users?${params}`)
-      if (response.ok) {
-        const data: UsersResponse = await response.json()
-        setUsers(data.users)
-        setTotalPages(data.pagination.pages)
-        setTotalUsers(data.pagination.total)
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error('API Error:', errorData)
+        throw new Error(errorData.error || 'Ошибка при загрузке пользователей')
       }
+      
+      const data: UsersResponse = await response.json()
+      console.log('Users data loaded:', data)
+      setUsers(data.users)
+      setTotalPages(data.pagination.pages)
+      setTotalUsers(data.pagination.total)
     } catch (error) {
       console.error('Error fetching users:', error)
     } finally {
@@ -118,6 +124,8 @@ export default function UsersPage() {
       if (response.ok) {
         const data = await response.json()
         setDepartments(data)
+      } else {
+        console.error('Failed to fetch departments:', response.status)
       }
     } catch (error) {
       console.error('Error fetching departments:', error)
