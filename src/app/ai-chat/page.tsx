@@ -138,6 +138,16 @@ export default function AIChatPage() {
     loadContracts()
   }, [])
 
+  // Перезагружаем настройки при фокусе на странице, чтобы получать актуальные данные
+  useEffect(() => {
+    const handleFocus = () => {
+      loadAISettings()
+    }
+    
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [])
+
   useEffect(() => {
     scrollToBottom()
   }, [currentSession?.messages])
@@ -226,6 +236,7 @@ export default function AIChatPage() {
       const response = await fetch('/api/ai-settings')
       if (response.ok) {
         const data = await response.json()
+        console.log('AI Settings loaded:', data)
         setAiSettings({
           isActive: data.isActive || false,
           defaultModel: data.defaultModel || '',
@@ -397,6 +408,12 @@ export default function AIChatPage() {
         companyPolicies: []
       }
 
+      console.log('Sending message to AI assistant:', {
+        model: aiSettings.defaultModel,
+        provider: aiSettings.provider,
+        messageCount: messagesForAPI.length
+      })
+
       const response = await fetch('/api/ai-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -411,74 +428,85 @@ export default function AIChatPage() {
         })
       })
 
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+      }
+
       const data = await response.json()
 
-      if (response.ok) {
-        const contractId = selectedContractId || 'default'
-        const userId = 'current-user'
-        
-        // Сохраняем историю параллельно
-        Promise.all([
-          fetch('/api/ai-assistant/history', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contractId,
-              userId,
-              message: inputMessage,
-              role: 'user'
-            })
-          }),
-          fetch('/api/ai-assistant/history', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contractId,
-              userId,
-              message: data.message?.content || data.response || '',
-              role: 'assistant'
-            })
+      const contractId = selectedContractId || 'default'
+      const userId = 'current-user'
+      
+      // Сохраняем историю параллельно
+      Promise.all([
+        fetch('/api/ai-assistant/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contractId,
+            userId,
+            message: inputMessage,
+            role: 'user'
           })
-        ]).catch(historyError => {
-          console.error('Error saving chat history:', historyError)
+        }),
+        fetch('/api/ai-assistant/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contractId,
+            userId,
+            message: data.message?.content || data.response || '',
+            role: 'assistant'
+          })
         })
+      ]).catch(historyError => {
+        console.error('Error saving chat history:', historyError)
+      })
 
-        const finalMessages = updatedSession.messages.map(msg => 
-          msg.id === assistantMessage.id 
-            ? { ...msg, content: data.message?.content || data.response || '', isLoading: false }
-            : msg
-        )
+      const finalMessages = updatedSession.messages.map(msg => 
+        msg.id === assistantMessage.id 
+          ? { ...msg, content: data.message?.content || data.response || '', isLoading: false }
+          : msg
+      )
 
-        const finalSession = {
-          ...updatedSession,
-          messages: finalMessages,
-          title: updatedSession.title === 'Новый чат' && inputMessage.length > 0 
-            ? inputMessage.slice(0, 50) + (inputMessage.length > 50 ? '...' : '')
-            : updatedSession.title
-        }
-
-        setCurrentSession(finalSession)
-        setSessions(prev => prev.map(s => 
-          s.id === currentSession.id ? finalSession : s
-        ))
-      } else {
-        const errorMessages = updatedSession.messages.map(msg => 
-          msg.id === assistantMessage.id 
-            ? { ...msg, isLoading: false, error: data.error || 'Произошла ошибка' }
-            : msg
-        )
-
-        setCurrentSession({
-          ...updatedSession,
-          messages: errorMessages
-        })
+      const finalSession = {
+        ...updatedSession,
+        messages: finalMessages,
+        title: updatedSession.title === 'Новый чат' && inputMessage.length > 0 
+          ? inputMessage.slice(0, 50) + (inputMessage.length > 50 ? '...' : '')
+          : updatedSession.title
       }
+
+      setCurrentSession(finalSession)
+      setSessions(prev => prev.map(s => 
+        s.id === currentSession.id ? finalSession : s
+      ))
     } catch (error) {
       console.error('Error sending message:', error)
       
+      let errorMessage = 'Ошибка соединения с AI-ассистентом'
+      if (error instanceof Error) {
+        errorMessage = error.message
+        // Если ошибка содержит информацию о проблеме подключения, показываем более конкретное сообщение
+        if (error.message.includes('fetch failed')) {
+          errorMessage = 'Не удалось подключиться к AI-провайдеру. Проверьте, что LM Studio запущен и доступен.'
+        } else if (error.message.includes('All endpoints failed')) {
+          errorMessage = 'AI-провайдер недоступен. Проверьте настройки подключения.'
+        } else if (error.message.includes('aborted')) {
+          errorMessage = 'Превышено время ожидания ответа от AI-провайдера. Модель может быть слишком медленной.'
+        } else if (error.message.includes('Invalid JSON response')) {
+          errorMessage = 'AI-провайдер вернул некорректный ответ. Попробуйте отправить сообщение еще раз.'
+        } else if (error.message.includes('Internal server error')) {
+          errorMessage = 'Внутренняя ошибка сервера AI-ассистента. Попробуйте позже.'
+        }
+      }
+      
+      console.error('AI Assistant error details:', error)
+      
       const errorMessages = updatedSession.messages.map(msg => 
         msg.id === assistantMessage.id 
-          ? { ...msg, isLoading: false, error: 'Ошибка соединения с AI-ассистентом' }
+          ? { ...msg, isLoading: false, error: errorMessage }
           : msg
       )
 

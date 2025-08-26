@@ -61,13 +61,21 @@ export default function Home() {
 
   useEffect(() => {
     // Обработка параметра поиска из URL
-    const urlParams = new URLSearchParams(window.location.search)
-    const searchParam = urlParams.get('search')
-    if (searchParam) {
-      setSearchTerm(searchParam)
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      const searchParam = urlParams.get('search')
+      if (searchParam) {
+        setSearchTerm(searchParam)
+      }
     }
-    fetchContracts()
-  }, [])
+    
+    // Загружаем договоры только если пользователь авторизован
+    if (user) {
+      fetchContracts()
+    } else {
+      setLoading(false)
+    }
+  }, [user])
 
   // Показываем форму входа, если пользователь не авторизован
   if (!authLoading && !user) {

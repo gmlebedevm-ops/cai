@@ -24,13 +24,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Проверяем наличие пользователя в localStorage при загрузке
-    const savedUser = localStorage.getItem('user')
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser))
-      } catch (error) {
-        console.error('Error parsing user from localStorage:', error)
-        localStorage.removeItem('user')
+    if (typeof window !== 'undefined') {
+      const savedUser = localStorage.getItem('user')
+      if (savedUser) {
+        try {
+          setUser(JSON.parse(savedUser))
+        } catch (error) {
+          console.error('Error parsing user from localStorage:', error)
+          localStorage.removeItem('user')
+        }
       }
     }
     setLoading(false)
@@ -38,7 +40,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = (userData: User) => {
     setUser(userData)
-    localStorage.setItem('user', JSON.stringify(userData))
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('user', JSON.stringify(userData))
+    }
   }
 
   const logout = async () => {
@@ -51,7 +55,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Logout API error:', error)
     } finally {
       setUser(null)
-      localStorage.removeItem('user')
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('user')
+      }
     }
   }
 

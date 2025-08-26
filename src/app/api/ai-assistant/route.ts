@@ -37,7 +37,7 @@ interface LMStudioResponse {
 // Конфигурация AI провайдеров (можно вынести в .env или базу данных)
 const AI_PROVIDERS = {
   'lm-studio': {
-    baseUrl: process.env.LM_STUDIO_BASE_URL || 'http://localhost:1234',
+    baseUrl: process.env.LM_STUDIO_URL || 'http://localhost:1234',
     apiKey: process.env.LM_STUDIO_API_KEY || 'your-api-key',
     defaultModel: process.env.LM_STUDIO_DEFAULT_MODEL || 'TheBloke/Mistral-7B-Instruct-v0.2-GGUF',
     defaultParams: {
@@ -265,119 +265,158 @@ export async function POST(request: NextRequest) {
     let lastError: any = null
     const urlsToTry = [requestUrl, ...alternativeUrls]
     
-    for (const url of urlsToTry) {
-      try {
-        console.log(`Trying URL: ${url}`)
-        
-        response = await fetch(url, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(requestBody),
-          signal: controller.signal
-        })
+    // Создаем AbortController для возможности отмены запросов
+    const controller = new AbortController()
+    
+    // Устанавливаем таймаут для запроса (60 секунд для медленных моделей)
+    const timeoutId = setTimeout(() => {
+      console.log('AI request timeout reached, aborting...')
+      controller.abort()
+    }, 60000)
+    
+    try {
+      for (const url of urlsToTry) {
+        try {
+          console.log(`Trying URL: ${url}`)
+          
+          response = await fetch(url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(requestBody),
+            signal: controller.signal
+          })
 
-        if (response.ok) {
-          console.log(`Successfully connected to: ${url}`)
-          break
-        } else {
-          const errorText = await response.text()
+          if (response.ok) {
+            console.log(`Successfully connected to: ${url}`)
+            clearTimeout(timeoutId)
+            
+            // Читаем ответ как текст для отладки
+            const responseText = await response.text()
+            console.log('Raw response text:', responseText)
+            
+            try {
+              // Парсим JSON и сохраняем для дальнейшего использования
+              const parsedData = JSON.parse(responseText)
+              console.log('Parsed response data:', JSON.stringify(parsedData, null, 2))
+              
+              // Сохраняем успешный ответ и данные
+              response = new Response(responseText, {
+                status: response.status,
+                statusText: response.statusText,
+                headers: response.headers
+              })
+              
+              // Сохраняем распарсенные данные для использования после цикла
+              ;(response as any).parsedData = parsedData
+              
+              break
+            } catch (parseError) {
+              console.error('Error parsing JSON response:', parseError)
+              console.error('Response text:', responseText)
+              throw new Error(`Invalid JSON response from AI provider: ${parseError.message}`)
+            }
+          } else {
+            const errorText = await response.text()
+            lastError = {
+              url,
+              status: response.status,
+              statusText: response.statusText,
+              error: errorText
+            }
+            console.warn(`Failed to connect to ${url}: ${response.status} ${response.statusText}`)
+            
+            // Если это последний URL в списке, выбрасываем ошибку
+            if (url === urlsToTry[urlsToTry.length - 1]) {
+              clearTimeout(timeoutId)
+              throw new Error(`All endpoints failed. Last error: ${response.status} ${response.statusText} - ${errorText}`)
+            }
+          }
+        } catch (fetchError: any) {
           lastError = {
             url,
-            status: response.status,
-            statusText: response.statusText,
-            error: errorText
+            error: fetchError.message
           }
-          console.warn(`Failed to connect to ${url}: ${response.status} ${response.statusText}`)
+          console.warn(`Error connecting to ${url}: ${fetchError.message}`)
           
           // Если это последний URL в списке, выбрасываем ошибку
           if (url === urlsToTry[urlsToTry.length - 1]) {
-            throw new Error(`All endpoints failed. Last error: ${response.status} ${response.statusText} - ${errorText}`)
+            clearTimeout(timeoutId)
+            throw new Error(`All endpoints failed. Last error: ${fetchError.message}`)
           }
         }
-      } catch (fetchError: any) {
-        lastError = {
-          url,
-          error: fetchError.message
-        }
-        console.warn(`Error connecting to ${url}: ${fetchError.message}`)
-        
-        // Если это последний URL в списке, выбрасываем ошибку
-        if (url === urlsToTry[urlsToTry.length - 1]) {
-          throw new Error(`All endpoints failed. Last error: ${fetchError.message}`)
-        }
       }
+    } catch (error) {
+      clearTimeout(timeoutId)
+      throw error
+    }
+
+    if (!response) {
+      return NextResponse.json(
+        { 
+          error: 'No response received from AI provider',
+          provider
+        },
+        { status: 500 }
+      )
     }
 
     try {
-      response = await fetch(requestUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(requestBody)
-      })
-    } catch (fetchError) {
-      console.error('Network error:', fetchError)
-      return NextResponse.json(
-        { 
-          error: `Network error: ${fetchError instanceof Error ? fetchError.message : 'Unknown network error'}`,
-          provider
-        },
-        { status: 500 }
-      )
-    }
+      // Если у нас есть сохраненные распарсенные данные, используем их
+      let data: LMStudioResponse
+      if ((response as any).parsedData) {
+        data = (response as any).parsedData
+        console.log('Using saved parsed data')
+      } else {
+        // Иначе читаем и парсим ответ заново
+        const responseText = await response.text()
+        console.log('Re-parsing response text:', responseText)
+        data = JSON.parse(responseText)
+      }
+      
+      console.log('Raw AI provider response:', JSON.stringify(data, null, 2))
+      
+      // Проверяем структуру ответа
+      if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
+        console.error('Invalid AI provider response structure:', data)
+        return NextResponse.json(
+          { 
+            error: 'Invalid response structure from AI provider',
+            details: 'Response missing choices array or choices is empty',
+            provider
+          },
+          { status: 500 }
+        )
+      }
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('AI provider API error:', {
+      console.log('AI provider response:', {
         provider,
-        status: response.status,
-        statusText: response.statusText,
-        error: errorText
+        id: data.id,
+        model: data.model,
+        choices: data.choices.length,
+        usage: data.usage
+      })
+
+      // Возврат ответа в формате, совместимом с интерфейсом
+      return NextResponse.json({
+        id: data.id,
+        model: data.model,
+        message: data.choices[0]?.message || { role: 'assistant', content: '' },
+        usage: data.usage,
+        finishReason: data.choices[0]?.finish_reason,
+        provider
       })
       
+    } catch (parseError) {
+      console.error('Error parsing AI provider response:', parseError)
       return NextResponse.json(
         { 
-          error: `AI provider API error: ${response.status} ${response.statusText}`,
-          details: errorText,
+          error: 'Error parsing AI provider response',
+          details: parseError instanceof Error ? parseError.message : 'Unknown parse error',
           provider
         },
         { status: 500 }
       )
     }
-
-    const data: LMStudioResponse = await response.json()
-    
-    console.log('Raw AI provider response:', JSON.stringify(data, null, 2))
-    
-    // Проверяем структуру ответа
-    if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
-      console.error('Invalid AI provider response structure:', data)
-      return NextResponse.json(
-        { 
-          error: 'Invalid response structure from AI provider',
-          details: 'Response missing choices array or choices is empty',
-          provider
-        },
-        { status: 500 }
-      )
-    }
-
-    console.log('AI provider response:', {
-      provider,
-      id: data.id,
-      model: data.model,
-      choices: data.choices.length,
-      usage: data.usage
-    })
-
-    // Возврат ответа в формате, совместимом с интерфейсом
-    return NextResponse.json({
-      id: data.id,
-      model: data.model,
-      message: data.choices[0]?.message || { role: 'assistant', content: '' },
-      usage: data.usage,
-      finishReason: data.choices[0]?.finish_reason,
-      provider
-    })
 
   } catch (error) {
     console.error('Error in AI assistant API:', error)
