@@ -250,9 +250,9 @@ export default function UsersPage() {
               Новый пользователь
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="adaptive-dialog max-h-[90vh] overflow-hidden flex flex-col">
             <form onSubmit={handleSubmit}>
-              <DialogHeader>
+              <DialogHeader className="flex-shrink-0 pb-4 border-b">
                 <DialogTitle className="flex items-center gap-2">
                   {editingUser ? (
                     <>
@@ -274,8 +274,9 @@ export default function UsersPage() {
                 </DialogDescription>
               </DialogHeader>
               
-              {editingUser && (
-                <Card className="bg-muted/50 py-2">
+              <div className="flex-1 overflow-y-auto py-4 space-y-4">
+                {editingUser && (
+                  <Card className="bg-muted/50 py-2">
                   <CardContent className="pt-1 pb-1">
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="flex items-center gap-2">
@@ -430,8 +431,9 @@ export default function UsersPage() {
                   </Alert>
                 )}
               </div>
+              </div>
               
-              <DialogFooter className="flex flex-col sm:flex-row gap-2">
+              <DialogFooter className="flex-shrink-0 pt-4 border-t flex flex-col sm:flex-row gap-2">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} className="sm:w-auto w-full">
                   Отмена
                 </Button>

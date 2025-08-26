@@ -275,18 +275,20 @@ export default function IntegrationsPage() {
               Создать интеграцию
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
+          <DialogContent className="adaptive-dialog max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogHeader className="flex-shrink-0 pb-4 border-b">
               <DialogTitle>Создание интеграции</DialogTitle>
               <DialogDescription>
                 Настройте новую интеграцию с внешней системой
               </DialogDescription>
             </DialogHeader>
-            <IntegrationForm
-              formData={formData}
-              setFormData={setFormData}
-            />
-            <DialogFooter>
+            <div className="flex-1 overflow-y-auto py-4">
+              <IntegrationForm
+                formData={formData}
+                setFormData={setFormData}
+              />
+            </div>
+            <DialogFooter className="flex-shrink-0 pt-4 border-t">
               <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
                 Отмена
               </Button>
@@ -403,19 +405,21 @@ export default function IntegrationsPage() {
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="adaptive-dialog max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="flex-shrink-0 pb-4 border-b">
             <DialogTitle>Редактирование интеграции</DialogTitle>
             <DialogDescription>
               Измените настройки интеграции
             </DialogDescription>
           </DialogHeader>
-          <IntegrationForm
-            formData={formData}
-            setFormData={setFormData}
-            isEdit
-          />
-          <DialogFooter>
+          <div className="flex-1 overflow-y-auto py-4">
+            <IntegrationForm
+              formData={formData}
+              setFormData={setFormData}
+              isEdit
+            />
+          </div>
+          <DialogFooter className="flex-shrink-0 pt-4 border-t">
             <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
               Отмена
             </Button>

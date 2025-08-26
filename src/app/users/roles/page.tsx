@@ -259,9 +259,9 @@ export default function RolesPage() {
               Новая роль
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="adaptive-dialog max-h-[90vh] overflow-hidden flex flex-col">
             <form onSubmit={handleRoleSubmit}>
-              <DialogHeader>
+              <DialogHeader className="flex-shrink-0 pb-4 border-b">
                 <DialogTitle>
                   {editingRole ? 'Редактирование роли' : 'Создание роли'}
                 </DialogTitle>
@@ -273,7 +273,8 @@ export default function RolesPage() {
                 </DialogDescription>
               </DialogHeader>
               
-              <div className="grid gap-4 py-4">
+              <div className="flex-1 overflow-y-auto py-4 space-y-4">
+                <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
                   <Label htmlFor="roleName">Название роли *</Label>
                   <Input
@@ -334,8 +335,9 @@ export default function RolesPage() {
                   </Alert>
                 )}
               </div>
+              </div>
               
-              <DialogFooter>
+              <DialogFooter className="flex-shrink-0 pt-4 border-t">
                 <Button type="button" variant="outline" onClick={() => setIsRoleDialogOpen(false)}>
                   Отмена
                 </Button>

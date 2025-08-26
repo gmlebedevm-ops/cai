@@ -285,22 +285,24 @@ export default function CounterpartiesPage() {
                 Новый контрагент
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-              <DialogHeader>
+            <DialogContent className="adaptive-dialog max-h-[90vh] overflow-hidden flex flex-col">
+              <DialogHeader className="flex-shrink-0 pb-4 border-b">
                 <DialogTitle>Создание контрагента</DialogTitle>
                 <DialogDescription>
                   Заполните информацию о новом контрагенте
                 </DialogDescription>
               </DialogHeader>
-              <CounterpartyForm 
-                formData={formData} 
-                setFormData={setFormData}
-                onSubmit={handleCreateCounterparty}
-                onCancel={() => {
-                  setCreateDialogOpen(false)
-                  resetForm()
-                }}
-              />
+              <div className="flex-1 overflow-y-auto py-4">
+                <CounterpartyForm 
+                  formData={formData} 
+                  setFormData={setFormData}
+                  onSubmit={handleCreateCounterparty}
+                  onCancel={() => {
+                    setCreateDialogOpen(false)
+                    resetForm()
+                  }}
+                />
+              </div>
             </DialogContent>
           </Dialog>
         </div>
@@ -533,22 +535,24 @@ export default function CounterpartiesPage() {
 
       {/* Edit Dialog */}
       <Dialog open={!!editingCounterparty} onOpenChange={() => setEditingCounterparty(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="adaptive-dialog max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="flex-shrink-0 pb-4 border-b">
             <DialogTitle>Редактирование контрагента</DialogTitle>
             <DialogDescription>
               Измените информацию о контрагенте
             </DialogDescription>
           </DialogHeader>
-          <CounterpartyForm 
-            formData={formData} 
-            setFormData={setFormData}
-            onSubmit={handleUpdateCounterparty}
-            onCancel={() => {
-              setEditingCounterparty(null)
-              resetForm()
-            }}
-          />
+          <div className="flex-1 overflow-y-auto py-4">
+            <CounterpartyForm 
+              formData={formData} 
+              setFormData={setFormData}
+              onSubmit={handleUpdateCounterparty}
+              onCancel={() => {
+                setEditingCounterparty(null)
+                resetForm()
+              }}
+            />
+          </div>
         </DialogContent>
       </Dialog>
     </div>

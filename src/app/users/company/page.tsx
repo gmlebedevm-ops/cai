@@ -269,14 +269,15 @@ export default function CompanyPage() {
               Создать отдел
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
+          <DialogContent className="adaptive-dialog max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogHeader className="flex-shrink-0 pb-4 border-b">
               <DialogTitle>Создание отдела</DialogTitle>
               <DialogDescription>
                 Создайте новый отдел в структуре компании
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
+            <div className="flex-1 overflow-y-auto py-4">
+              <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="name" className="text-right">
                   Название
@@ -334,9 +335,10 @@ export default function CompanyPage() {
                 </Select>
               </div>
             </div>
-            <DialogFooter>
+            <DialogFooter className="flex-shrink-0 pt-4 border-t">
               <Button onClick={handleCreateDepartment}>Создать</Button>
             </DialogFooter>
+          </div>
           </DialogContent>
         </Dialog>
       </div>
@@ -413,14 +415,15 @@ export default function CompanyPage() {
       </Tabs>
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
+        <DialogContent className="adaptive-dialog max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="flex-shrink-0 pb-4 border-b">
             <DialogTitle>Редактирование отдела</DialogTitle>
             <DialogDescription>
               Измените информацию об отделе
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="flex-1 overflow-y-auto py-4">
+            <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="edit-name" className="text-right">
                 Название
@@ -495,10 +498,11 @@ export default function CompanyPage() {
               </Select>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0 pt-4 border-t">
             <Button onClick={handleUpdateDepartment}>Сохранить</Button>
           </DialogFooter>
-        </DialogContent>
+          </div>
+          </DialogContent>
       </Dialog>
     </div>
   )

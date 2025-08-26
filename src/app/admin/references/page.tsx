@@ -92,11 +92,12 @@ export default function ReferencesPage() {
       const response = await fetch(`/api/references?${params}`)
       if (response.ok) {
         const data = await response.json()
-        setReferences(data)
+        const referencesData = data.references || data
+        setReferences(referencesData)
         
         // Автоматически разворачиваем типы с элементами
         const typesWithItems = new Set(
-          data
+          referencesData
             .filter((ref: Reference) => ref.children && ref.children.length > 0)
             .map((ref: Reference) => ref.type)
         )
@@ -274,19 +275,21 @@ export default function ReferencesPage() {
               Создать справочник
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
+          <DialogContent className="adaptive-dialog max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogHeader className="flex-shrink-0 pb-4 border-b">
               <DialogTitle>Создание справочника</DialogTitle>
               <DialogDescription>
                 Создайте новый элемент справочника
               </DialogDescription>
             </DialogHeader>
-            <ReferenceForm
-              formData={formData}
-              setFormData={setFormData}
-              references={references}
-            />
-            <DialogFooter>
+            <div className="flex-1 overflow-y-auto py-4">
+              <ReferenceForm
+                formData={formData}
+                setFormData={setFormData}
+                references={references}
+              />
+            </div>
+            <DialogFooter className="flex-shrink-0 pt-4 border-t">
               <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
                 Отмена
               </Button>
@@ -407,20 +410,22 @@ export default function ReferencesPage() {
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="adaptive-dialog max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader className="flex-shrink-0 pb-4 border-b">
             <DialogTitle>Редактирование справочника</DialogTitle>
             <DialogDescription>
               Измените данные справочника
             </DialogDescription>
           </DialogHeader>
-          <ReferenceForm
-            formData={formData}
-            setFormData={setFormData}
-            references={references}
-            isEdit
-          />
-          <DialogFooter>
+          <div className="flex-1 overflow-y-auto py-4">
+            <ReferenceForm
+              formData={formData}
+              setFormData={setFormData}
+              references={references}
+              isEdit
+            />
+          </div>
+          <DialogFooter className="flex-shrink-0 pt-4 border-t">
             <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
               Отмена
             </Button>

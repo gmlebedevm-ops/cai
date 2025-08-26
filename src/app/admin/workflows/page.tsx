@@ -313,7 +313,7 @@ export default function WorkflowsPage() {
               </DialogDescription>
             </DialogHeader>
             
-            <div className="flex-shrink-0 overflow-y-auto max-h-[calc(90vh-200px)]">
+            <div className="flex-1 overflow-y-auto">
               <EnhancedWorkflowForm
                 formData={formData}
                 setFormData={setFormData}
@@ -488,7 +488,7 @@ export default function WorkflowsPage() {
             </DialogDescription>
           </DialogHeader>
           
-          <div className="flex-shrink-0 overflow-y-auto max-h-[calc(90vh-200px)]">
+          <div className="flex-1 overflow-y-auto">
               <EnhancedWorkflowForm
                 formData={formData}
                 setFormData={setFormData}

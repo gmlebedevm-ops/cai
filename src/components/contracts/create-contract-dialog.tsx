@@ -213,16 +213,17 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess }: CreateCo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="adaptive-dialog max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader className="flex-shrink-0 pb-4 border-b">
           <DialogTitle>Создание нового договора</DialogTitle>
           <DialogDescription>
             Заполните обязательные поля для создания договора. При сумме более 300 тыс. ₽ требуется загрузка тендерного листа.
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <div className="flex-1 overflow-y-auto py-4">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -467,39 +468,40 @@ export function CreateContractDialog({ open, onOpenChange, onSuccess }: CreateCo
                 </p>
               )}
             </div>
+            </form>
+          </Form>
+        </div>
 
-            <DialogFooter className="flex flex-col sm:flex-row gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={loading}
-                className="order-1 sm:order-1"
-              >
-                Отмена
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => form.handleSubmit((values) => onSubmit(values, 'draft'))()}
-                disabled={loading}
-                className="order-3 sm:order-2"
-              >
-                <Save className="h-4 w-4 mr-2" />
-                {loading ? 'Сохранение...' : 'Сохранить в черновики'}
-              </Button>
-              <Button
-                type="button"
-                onClick={() => form.handleSubmit((values) => onSubmit(values, 'submit'))()}
-                disabled={loading || !form.watch('workflowId')}
-                className="order-2 sm:order-3"
-              >
-                <Send className="h-4 w-4 mr-2" />
-                {loading ? 'Отправка...' : 'Отправить на согласование'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+        <DialogFooter className="flex-shrink-0 pt-4 border-t flex flex-col sm:flex-row gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={loading}
+            className="order-1 sm:order-1"
+          >
+            Отмена
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => form.handleSubmit((values) => onSubmit(values, 'draft'))()}
+            disabled={loading}
+            className="order-3 sm:order-2"
+          >
+            <Save className="h-4 w-4 mr-2" />
+            {loading ? 'Сохранение...' : 'Сохранить в черновики'}
+          </Button>
+          <Button
+            type="button"
+            onClick={() => form.handleSubmit((values) => onSubmit(values, 'submit'))()}
+            disabled={loading || !form.watch('workflowId')}
+            className="order-2 sm:order-3"
+          >
+            <Send className="h-4 w-4 mr-2" />
+            {loading ? 'Отправка...' : 'Отправить на согласование'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
