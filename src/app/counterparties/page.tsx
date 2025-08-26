@@ -27,7 +27,7 @@ import {
   FileText
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { Reference, ReferenceType } from '@/types/index'
+import { Reference, ReferenceType, CounterpartyStatus } from '@/types/index'
 
 interface Counterparty extends Reference {
   contactInfo?: {
@@ -38,16 +38,28 @@ interface Counterparty extends Reference {
   }
   contractCount?: number
   lastContractDate?: string
+  counterpartyStatus?: CounterpartyStatus
+  counterpartyApprovals?: any[]
 }
 
 const statusColors = {
-  true: 'bg-green-500',
-  false: 'bg-gray-400',
+  [CounterpartyStatus.DRAFT]: 'bg-gray-500',
+  [CounterpartyStatus.PENDING_APPROVAL]: 'bg-yellow-500',
+  [CounterpartyStatus.APPROVED]: 'bg-green-500',
+  [CounterpartyStatus.REJECTED]: 'bg-red-500',
+  [CounterpartyStatus.ACTIVE]: 'bg-blue-500',
+  [CounterpartyStatus.INACTIVE]: 'bg-gray-400',
+  [CounterpartyStatus.BLOCKED]: 'bg-red-700',
 }
 
 const statusLabels = {
-  true: 'Активен',
-  false: 'Неактивен',
+  [CounterpartyStatus.DRAFT]: 'Черновик',
+  [CounterpartyStatus.PENDING_APPROVAL]: 'На согласовании',
+  [CounterpartyStatus.APPROVED]: 'Согласован',
+  [CounterpartyStatus.REJECTED]: 'Отклонен',
+  [CounterpartyStatus.ACTIVE]: 'Активен',
+  [CounterpartyStatus.INACTIVE]: 'Неактивен',
+  [CounterpartyStatus.BLOCKED]: 'Заблокирован',
 }
 
 export default function CounterpartiesPage() {
@@ -71,7 +83,8 @@ export default function CounterpartiesPage() {
       website: ''
     },
     isActive: true,
-    metadata: '{}'
+    metadata: '{}',
+    sendForApproval: false
   })
 
   const fetchCounterparties = async () => {
@@ -96,7 +109,10 @@ export default function CounterpartiesPage() {
     const matchesSearch = counterparty.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          counterparty.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          counterparty.description?.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === 'all' || counterparty.isActive.toString() === statusFilter
+    const matchesStatus = statusFilter === 'all' || 
+                          (statusFilter === 'active' && counterparty.isActive) ||
+                          (statusFilter === 'inactive' && !counterparty.isActive) ||
+                          counterparty.counterpartyStatus === statusFilter
     
     return matchesSearch && matchesStatus
   })
@@ -111,7 +127,8 @@ export default function CounterpartiesPage() {
         body: JSON.stringify({
           ...formData,
           type: 'COUNTERPARTY',
-          value: JSON.stringify(formData.contactInfo)
+          value: JSON.stringify(formData.contactInfo),
+          sendForApproval: formData.sendForApproval
         }),
       })
 
@@ -168,7 +185,14 @@ export default function CounterpartiesPage() {
   }
 
   const handleEditClick = (counterparty: Counterparty) => {
-    const contactInfo = counterparty.value ? JSON.parse(counterparty.value) : {}
+    let contactInfo = {}
+    try {
+      contactInfo = counterparty.value ? JSON.parse(counterparty.value) : {}
+    } catch (error) {
+      console.error('Error parsing contact info for counterparty:', counterparty.id, error)
+      contactInfo = {}
+    }
+    
     setFormData({
       name: counterparty.name,
       code: counterparty.code,
@@ -180,7 +204,8 @@ export default function CounterpartiesPage() {
         website: contactInfo.website || ''
       },
       isActive: counterparty.isActive,
-      metadata: counterparty.metadata || '{}'
+      metadata: counterparty.metadata || '{}',
+      sendForApproval: false
     })
     setEditingCounterparty(counterparty)
   }
@@ -197,7 +222,8 @@ export default function CounterpartiesPage() {
         website: ''
       },
       isActive: true,
-      metadata: '{}'
+      metadata: '{}',
+      sendForApproval: false
     })
   }
 
@@ -293,23 +319,23 @@ export default function CounterpartiesPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Активные</CardTitle>
-            <Contact className="h-4 w-4 text-green-600" />
+            <CardTitle className="text-sm font-medium">На согласовании</CardTitle>
+            <Contact className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {counterparties.filter(c => c.isActive).length}
+              {counterparties.filter(c => c.counterpartyStatus === CounterpartyStatus.PENDING_APPROVAL).length}
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Неактивные</CardTitle>
-            <Contact className="h-4 w-4 text-gray-600" />
+            <CardTitle className="text-sm font-medium">Согласованные</CardTitle>
+            <Contact className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {counterparties.filter(c => !c.isActive).length}
+              {counterparties.filter(c => c.counterpartyStatus === CounterpartyStatus.APPROVED || c.counterpartyStatus === CounterpartyStatus.ACTIVE).length}
             </div>
           </CardContent>
         </Card>
@@ -351,8 +377,15 @@ export default function CounterpartiesPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Все статусы</SelectItem>
-                <SelectItem value="true">Активные</SelectItem>
-                <SelectItem value="false">Неактивные</SelectItem>
+                <SelectItem value={CounterpartyStatus.DRAFT}>Черновики</SelectItem>
+                <SelectItem value={CounterpartyStatus.PENDING_APPROVAL}>На согласовании</SelectItem>
+                <SelectItem value={CounterpartyStatus.APPROVED}>Согласованные</SelectItem>
+                <SelectItem value={CounterpartyStatus.REJECTED}>Отклоненные</SelectItem>
+                <SelectItem value={CounterpartyStatus.ACTIVE}>Активные</SelectItem>
+                <SelectItem value={CounterpartyStatus.INACTIVE}>Неактивные</SelectItem>
+                <SelectItem value={CounterpartyStatus.BLOCKED}>Заблокированные</SelectItem>
+                <SelectItem value="active">Активные (старый фильтр)</SelectItem>
+                <SelectItem value="inactive">Неактивные (старый фильтр)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -370,7 +403,14 @@ export default function CounterpartiesPage() {
           ) : (
             <div className="space-y-4">
               {filteredCounterparties.map((counterparty) => {
-                const contactInfo = counterparty.value ? JSON.parse(counterparty.value) : {}
+                let contactInfo = {}
+                try {
+                  contactInfo = counterparty.value ? JSON.parse(counterparty.value) : {}
+                } catch (error) {
+                  console.error('Error parsing contact info for counterparty:', counterparty.id, error)
+                  contactInfo = {}
+                }
+                
                 return (
                   <Card 
                     key={counterparty.id} 
@@ -382,8 +422,8 @@ export default function CounterpartiesPage() {
                         <div className="flex-1 space-y-2">
                           <div className="flex items-center gap-2">
                             <h3 className="text-lg font-semibold">{counterparty.name}</h3>
-                            <Badge className={`${statusColors[counterparty.isActive]} text-white`}>
-                              {statusLabels[counterparty.isActive]}
+                            <Badge className={`${statusColors[counterparty.counterpartyStatus || (counterparty.isActive ? CounterpartyStatus.ACTIVE : CounterpartyStatus.INACTIVE)]} text-white`}>
+                              {statusLabels[counterparty.counterpartyStatus || (counterparty.isActive ? CounterpartyStatus.ACTIVE : CounterpartyStatus.INACTIVE)]}
                             </Badge>
                             {counterparty.contractCount && counterparty.contractCount > 0 && (
                               <Badge variant="secondary">
@@ -622,12 +662,44 @@ function CounterpartyForm({ formData, setFormData, onSubmit, onCancel }: Counter
         <Label htmlFor="isActive">Активен</Label>
       </div>
       
-      <DialogFooter>
-        <Button variant="outline" onClick={onCancel}>
+      <div className="flex items-center space-x-2">
+        <Switch
+          id="sendForApproval"
+          checked={formData.sendForApproval}
+          onCheckedChange={(checked) => setFormData({...formData, sendForApproval: checked})}
+        />
+        <Label htmlFor="sendForApproval">Отправить на согласование директору по безопасности</Label>
+      </div>
+      
+      {formData.sendForApproval && (
+        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <div className="flex items-center gap-2 text-sm text-yellow-800">
+            <Contact className="h-4 w-4" />
+            <span>Контрагент будет отправлен на согласование директору по безопасности. После согласования он станет доступен для использования в договорах.</span>
+          </div>
+        </div>
+      )}
+      
+      <DialogFooter className="flex flex-col sm:flex-row gap-2">
+        <Button variant="outline" onClick={onCancel} className="order-1 sm:order-1">
           Отмена
         </Button>
-        <Button onClick={onSubmit}>
-          Сохранить
+        <Button 
+          variant="outline" 
+          onClick={() => {
+            setFormData({...formData, sendForApproval: false})
+            onSubmit()
+          }}
+          className="order-3 sm:order-2"
+        >
+          Сохранить в черновики
+        </Button>
+        <Button 
+          onClick={onSubmit}
+          disabled={!formData.sendForApproval}
+          className="order-2 sm:order-3"
+        >
+          {formData.sendForApproval ? 'Отправить на согласование' : 'Сохранить'}
         </Button>
       </DialogFooter>
     </div>

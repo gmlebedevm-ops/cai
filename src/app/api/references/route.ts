@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
       ]
     })
 
-    // Если запрашиваем контрагентов, добавляем информацию о договорах
+    // Если запрашиваем контрагентов, добавляем информацию о договорах и статусах
     let enhancedReferences = references
     if (type === 'COUNTERPARTY') {
       enhancedReferences = await Promise.all(references.map(async (ref) => {
@@ -71,10 +71,27 @@ export async function GET(request: NextRequest) {
           }
         })
 
+        const approvals = await db.counterpartyApproval.findMany({
+          where: {
+            counterpartyId: ref.id
+          },
+          include: {
+            approver: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true
+              }
+            }
+          }
+        })
+
         return {
           ...ref,
           contractCount,
-          lastContractDate: lastContract?.createdAt
+          lastContractDate: lastContract?.createdAt,
+          counterpartyApprovals: approvals
         }
       }))
     }
@@ -92,7 +109,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { type, code, name, description, value, isActive = true, sortOrder = 0, metadata, parentCode } = body
+    const { 
+      type, 
+      code, 
+      name, 
+      description, 
+      value, 
+      isActive = true, 
+      sortOrder = 0, 
+      metadata, 
+      parentCode,
+      counterpartyStatus,
+      sendForApproval = false
+    } = body
 
     if (!type || !code || !name) {
       return NextResponse.json(
@@ -127,6 +156,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Определяем статус для контрагента
+    let finalCounterpartyStatus = counterpartyStatus || 'DRAFT'
+    if (type === 'COUNTERPARTY' && sendForApproval) {
+      finalCounterpartyStatus = 'PENDING_APPROVAL'
+    }
+
     const reference = await db.reference.create({
       data: {
         type,
@@ -137,13 +172,77 @@ export async function POST(request: NextRequest) {
         isActive,
         sortOrder,
         metadata,
-        parentCode
+        parentCode,
+        counterpartyStatus: type === 'COUNTERPARTY' ? finalCounterpartyStatus : null
       },
       include: {
         children: true,
-        parent: true
+        parent: true,
+        counterpartyApprovals: true
       }
     })
+
+    // Если это контрагент и нужно отправить на согласование
+    if (type === 'COUNTERPARTY' && sendForApproval) {
+      // Находим директора по безопасности (security@test.com)
+      const securityDirector = await db.user.findFirst({
+        where: { 
+          AND: [
+            { role: 'GENERAL_DIRECTOR' },
+            { email: 'security@test.com' }
+          ]
+        }
+      })
+
+      if (securityDirector) {
+        // Создаем согласование
+        await db.counterpartyApproval.create({
+          data: {
+            counterpartyId: reference.id,
+            approverId: securityDirector.id,
+            status: 'PENDING',
+            dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000) // 3 дня на согласование
+          }
+        })
+
+        // Создаем уведомление для директора по безопасности
+        await db.notification.create({
+          data: {
+            type: 'APPROVAL_REQUESTED',
+            title: 'Новый контрагент на согласовании',
+            message: `Контрагент ${name} требует вашего согласования`,
+            userId: securityDirector.id,
+            actionUrl: `/counterparties/${reference.id}`
+          }
+        })
+      } else {
+        // Если директор по безопасности не найден, используем любого генерального директора
+        const anyDirector = await db.user.findFirst({
+          where: { role: 'GENERAL_DIRECTOR' }
+        })
+
+        if (anyDirector) {
+          await db.counterpartyApproval.create({
+            data: {
+              counterpartyId: reference.id,
+              approverId: anyDirector.id,
+              status: 'PENDING',
+              dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+            }
+          })
+
+          await db.notification.create({
+            data: {
+              type: 'APPROVAL_REQUESTED',
+              title: 'Новый контрагент на согласовании',
+              message: `Контрагент ${name} требует вашего согласования`,
+              userId: anyDirector.id,
+              actionUrl: `/counterparties/${reference.id}`
+            }
+          })
+        }
+      }
+    }
 
     return NextResponse.json(reference, { status: 201 })
   } catch (error) {

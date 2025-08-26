@@ -64,6 +64,16 @@ enum WorkflowStepType {
   CONDITION
 }
 
+enum CounterpartyStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  ACTIVE
+  INACTIVE
+  BLOCKED
+}
+
 enum ReferenceType {
   COUNTERPARTY
   CONTRACT_TYPE
@@ -193,6 +203,9 @@ model User {
   // Отношения для структуры компании
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id])
+  
+  // Для согласований контрагентов
+  counterpartyApprovals CounterpartyApproval[]
 }
 
 enum ShippingMethod {
@@ -401,4 +414,26 @@ model Reference {
   parentCode  String?       // Для иерархических справочников
   children    Reference[]   @relation("ReferenceHierarchy")
   parent      Reference?    @relation("ReferenceHierarchy", fields: [parentCode], references: [code])
+  
+  // Для контрагентов - статус согласования
+  counterpartyStatus CounterpartyStatus? @default(DRAFT)
+  counterpartyApprovals CounterpartyApproval[]
+}
+
+// Counterparty Approval Model
+model CounterpartyApproval {
+  id          String              @id @default(cuid())
+  status      String              // "PENDING", "APPROVED", "REJECTED"
+  comment     String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  
+  // Relations
+  counterpartyId String
+  counterparty   Reference         @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+  
+  approverId    String
+  approver      User              @relation(fields: [approverId], references: [id])
+  
+  dueDate      DateTime?
 }

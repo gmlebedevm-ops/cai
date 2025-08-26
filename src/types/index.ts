@@ -220,4 +220,38 @@ export interface Reference {
   // Дополнительные поля для контрагентов
   contractCount?: number
   lastContractDate?: Date
+  counterpartyStatus?: string
+  counterpartyApprovals?: CounterpartyApproval[]
+}
+
+export enum ReferenceType {
+  COUNTERPARTY = 'COUNTERPARTY',
+  CONTRACT_TYPE = 'CONTRACT_TYPE',
+  DEPARTMENT = 'DEPARTMENT',
+  POSITION = 'POSITION',
+  DOCUMENT_CATEGORY = 'DOCUMENT_CATEGORY',
+  APPROVAL_REASON = 'APPROVAL_REASON',
+  REJECTION_REASON = 'REJECTION_REASON',
+}
+
+export enum CounterpartyStatus {
+  DRAFT = 'DRAFT',
+  PENDING_APPROVAL = 'PENDING_APPROVAL',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  BLOCKED = 'BLOCKED',
+}
+
+export interface CounterpartyApproval {
+  id: string
+  status: string
+  comment?: string
+  createdAt: Date
+  updatedAt: Date
+  counterpartyId: string
+  approverId: string
+  dueDate?: Date
+  approver?: User
 }

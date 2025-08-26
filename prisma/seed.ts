@@ -37,6 +37,11 @@ async function main() {
       role: UserRole.GENERAL_DIRECTOR
     },
     {
+      email: 'security@test.com',
+      name: 'Алексей Алексеев',
+      role: UserRole.GENERAL_DIRECTOR // Директор по безопасности
+    },
+    {
       email: 'office@test.com',
       name: 'Елена Еленова',
       role: UserRole.OFFICE_MANAGER
