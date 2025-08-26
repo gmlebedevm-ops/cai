@@ -415,6 +415,50 @@ export default function AISettingsPage() {
       
       setSettings(newSettings)
       
+      // Если изменяется провайдер, автоматически тестируем подключение
+      if (field === 'provider') {
+        try {
+          // Сначала сохраняем настройки
+          await fetch('/api/ai-settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newSettings)
+          })
+          console.log('Provider saved successfully:', value)
+          
+          // Затем тестируем подключение
+          setTimeout(() => {
+            testConnection()
+          }, 500) // Небольшая задержка чтобы убедиться что настройки сохранились
+        } catch (error) {
+          console.error('Error saving provider:', error)
+          // Возвращаем предыдущее значение в случае ошибки
+          setSettings(settings)
+        }
+      }
+      
+      // Если изменяется URL для LM Studio, автоматически тестируем подключение
+      if (field === 'lmStudioUrl' && settings.provider === 'lm-studio') {
+        try {
+          // Сначала сохраняем настройки
+          await fetch('/api/ai-settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newSettings)
+          })
+          console.log('URL saved successfully:', value)
+          
+          // Затем тестируем подключение
+          setTimeout(() => {
+            testConnection()
+          }, 500) // Небольшая задержка чтобы убедиться что настройки сохранились
+        } catch (error) {
+          console.error('Error saving URL:', error)
+          // Возвращаем предыдущее значение в случае ошибки
+          setSettings(settings)
+        }
+      }
+      
       // Если изменяется модель, автоматически сохраняем настройки
       if (field === 'defaultModel') {
         try {

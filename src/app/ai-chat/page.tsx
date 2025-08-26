@@ -116,8 +116,9 @@ export default function AIChatPage() {
   const [aiSettings, setAiSettings] = useState({
     isActive: false,
     defaultModel: '',
-    provider: 'lm-studio'
+    provider: 'z-ai'
   })
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true)
   const [contracts, setContracts] = useState<Contract[]>([])
   const [selectedContractId, setSelectedContractId] = useState<string>('')
   const [contractData, setContractData] = useState<any>(null)
@@ -133,20 +134,38 @@ export default function AIChatPage() {
   const scrollAreaRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    loadSessions()
-    loadAISettings()
-    loadContracts()
+    // Проверяем, что мы на клиентской стороне
+    if (typeof window !== 'undefined') {
+      console.log('useEffect called - loading initial data')
+      // Добавляем небольшую задержку, чтобы убедиться, что все компоненты готовы
+      const timer = setTimeout(() => {
+        loadSessions()
+        loadAISettings()
+        loadContracts()
+      }, 100)
+      
+      return () => clearTimeout(timer)
+    }
   }, [])
 
   // Перезагружаем настройки при фокусе на странице, чтобы получать актуальные данные
   useEffect(() => {
     const handleFocus = () => {
-      loadAISettings()
+      if (typeof window !== 'undefined' && !isLoadingSettings) {
+        console.log('Window focused - reloading AI settings')
+        loadAISettings()
+      }
     }
     
-    window.addEventListener('focus', handleFocus)
-    return () => window.removeEventListener('focus', handleFocus)
-  }, [])
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', handleFocus)
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleFocus)
+      }
+    }
+  }, [isLoadingSettings]) // Добавляем зависимость, чтобы избежать проблем
 
   useEffect(() => {
     scrollToBottom()
@@ -192,71 +211,136 @@ export default function AIChatPage() {
   const loadSessions = async () => {
     setIsLoadingHistory(true)
     try {
+      console.log('Loading chat sessions...')
       const contractId = selectedContractId || 'default'
       const userId = 'current-user'
       const response = await fetch(`/api/ai-assistant/history?contractId=${contractId}&userId=${userId}`)
-      if (response.ok) {
-        const data = await response.json()
-        if (data.messages && data.messages.length > 0) {
-          const session: ChatSession = {
-            id: data.id,
-            title: selectedContractId ? `Чат по договору ${contracts.find(c => c.id === selectedContractId)?.number || ''}` : 'Общий чат',
-            createdAt: new Date(data.createdAt),
-            lastMessage: new Date(data.updatedAt),
-            messages: data.messages.map((msg: any) => ({
-              id: `${msg.timestamp}_${msg.role}`,
-              role: msg.role,
-              content: msg.content,
-              timestamp: new Date(msg.timestamp)
-            }))
-          }
-          setSessions([session])
-          setCurrentSession(session)
-        } else {
-          const newSession: ChatSession = {
-            id: Date.now().toString(),
-            title: selectedContractId ? `Чат по договору ${contracts.find(c => c.id === selectedContractId)?.number || ''}` : 'Новый чат',
-            createdAt: new Date(),
-            lastMessage: new Date(),
-            messages: []
-          }
-          setSessions([newSession])
-          setCurrentSession(newSession)
+      console.log('Chat history response status:', response.status)
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Chat history response not ok:', response.status, errorText)
+        throw new Error(`HTTP ${response.status}: ${errorText}`)
+      }
+      
+      const data = await response.json()
+      console.log('Chat history loaded:', data)
+      
+      if (data.messages && data.messages.length > 0) {
+        const session: ChatSession = {
+          id: data.id,
+          title: selectedContractId ? `Чат по договору ${contracts.find(c => c.id === selectedContractId)?.number || ''}` : 'Общий чат',
+          createdAt: new Date(data.createdAt),
+          lastMessage: new Date(data.updatedAt),
+          messages: data.messages.map((msg: any) => ({
+            id: `${msg.timestamp}_${msg.role}`,
+            role: msg.role,
+            content: msg.content,
+            timestamp: new Date(msg.timestamp)
+          }))
         }
+        setSessions([session])
+        setCurrentSession(session)
+      } else {
+        const newSession: ChatSession = {
+          id: Date.now().toString(),
+          title: selectedContractId ? `Чат по договору ${contracts.find(c => c.id === selectedContractId)?.number || ''}` : 'Новый чат',
+          createdAt: new Date(),
+          lastMessage: new Date(),
+          messages: []
+        }
+        setSessions([newSession])
+        setCurrentSession(newSession)
       }
     } catch (error) {
       console.error('Error loading chat sessions:', error)
+      // Создаем новую сессию в случае ошибки
+      const newSession: ChatSession = {
+        id: Date.now().toString(),
+        title: selectedContractId ? `Чат по договору ${contracts.find(c => c.id === selectedContractId)?.number || ''}` : 'Новый чат',
+        createdAt: new Date(),
+        lastMessage: new Date(),
+        messages: []
+      }
+      setSessions([newSession])
+      setCurrentSession(newSession)
     } finally {
       setIsLoadingHistory(false)
     }
   }
 
-  const loadAISettings = async () => {
+  const loadAISettings = async (retryCount = 0) => {
+    console.log('loadAISettings called, retry:', retryCount)
+    setIsLoadingSettings(true)
     try {
+      console.log('Loading AI settings...')
       const response = await fetch('/api/ai-settings')
-      if (response.ok) {
-        const data = await response.json()
-        console.log('AI Settings loaded:', data)
-        setAiSettings({
-          isActive: data.isActive || false,
-          defaultModel: data.defaultModel || '',
-          provider: data.provider || 'lm-studio'
-        })
+      console.log('AI settings response status:', response.status)
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('AI settings response not ok:', response.status, errorText)
+        throw new Error(`HTTP ${response.status}: ${errorText}`)
       }
+      
+      const data = await response.json()
+      console.log('AI Settings loaded:', data)
+      console.log('AI Settings isActive:', data.isActive)
+      const newSettings = {
+        isActive: data.isActive || false,
+        defaultModel: data.defaultModel || '',
+        provider: data.provider || 'z-ai'
+      }
+      console.log('Setting new AI settings:', newSettings)
+      setAiSettings(newSettings)
+      console.log('setAiSettings called')
     } catch (error) {
       console.error('Error loading AI settings:', error)
+      
+      // Если это ошибка сети и у нас есть попытки, пробуем еще раз
+      if (retryCount < 3 && error instanceof Error && (
+        error.message.includes('Failed to fetch') || 
+        error.message.includes('fetch failed') ||
+        error.message.includes('NetworkError')
+      )) {
+        console.log('Retrying AI settings load...', retryCount + 1)
+        setTimeout(() => loadAISettings(retryCount + 1), 1000 * (retryCount + 1))
+        return
+      }
+      
+      // Устанавливаем настройки по умолчанию в случае ошибки
+      const defaultSettings = {
+        isActive: false,
+        defaultModel: '',
+        provider: 'z-ai'
+      }
+      console.log('Setting default AI settings:', defaultSettings)
+      setAiSettings(defaultSettings)
+      console.log('setAiSettings called with defaults')
+    } finally {
+      console.log('Setting isLoadingSettings to false')
+      setIsLoadingSettings(false)
     }
   }
 
   const loadContracts = async () => {
     try {
+      console.log('Loading contracts...')
       const response = await fetch('/api/contracts')
-      if (response.ok) {
-        const data = await response.json()
-        setContracts(data.contracts || [])
+      console.log('Contracts response status:', response.status)
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Contracts response not ok:', response.status, errorText)
+        throw new Error(`HTTP ${response.status}: ${errorText}`)
       }
+      
+      const data = await response.json()
+      console.log('Contracts loaded:', data.contracts?.length || 0)
+      setContracts(data.contracts || [])
     } catch (error) {
       console.error('Error loading contracts:', error)
+      setContracts([])
     }
   }
 
@@ -556,7 +640,7 @@ export default function AIChatPage() {
     }
   }
 
-  if (!aiSettings.isActive) {
+  if (!isLoadingSettings && !aiSettings.isActive) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <Card className="w-full max-w-md">
@@ -581,6 +665,30 @@ export default function AIChatPage() {
               <Settings className="h-4 w-4 mr-2" />
               Перейти к настройкам
             </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (isLoadingSettings) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle className="flex items-center justify-center gap-2">
+              <Bot className="h-6 w-6" />
+              AI-ассистент
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-center space-y-4">
+            <Loader2 className="h-12 w-12 animate-spin text-muted-foreground mx-auto" />
+            <div className="space-y-2">
+              <p className="text-lg font-medium">Загрузка настроек...</p>
+              <p className="text-sm text-muted-foreground">
+                Пожалуйста, подождите
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>
