@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test AI Settings</title>
+</head>
+<body>
+    <h1>Test AI Settings API</h1>
+    <div id="status">Checking...</div>
+    <div id="result"></div>
+    
+    <script>
+        async function testAISettings() {
+            const statusDiv = document.getElementById('status');
+            const resultDiv = document.getElementById('result');
+            
+            try {
+                statusDiv.textContent = 'Fetching settings...';
+                
+                const response = await fetch('/api/ai-settings');
+                console.log('Response status:', response.status);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Settings data:', data);
+                    
+                    statusDiv.textContent = '✅ Settings loaded successfully';
+                    resultDiv.innerHTML = `
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    const error = await response.json();
+                    console.error('API Error:', error);
+                    
+                    statusDiv.textContent = '❌ API Error';
+                    resultDiv.innerHTML = `
+                        <p>Status: ${response.status}</p>
+                        <pre>${JSON.stringify(error, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                console.error('Fetch error:', error);
+                
+                statusDiv.textContent = '❌ Fetch Error';
+                resultDiv.innerHTML = `
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+        
+        // Test when page loads
+        testAISettings();
+    </script>
+</body>
+</html>

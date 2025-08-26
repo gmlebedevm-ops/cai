@@ -437,3 +437,27 @@ model CounterpartyApproval {
   
   dueDate      DateTime?
 }
+
+// AI Settings Model
+enum AIProvider {
+  LM_STUDIO
+  Z_AI
+  OPENAI
+  ANTHROPIC
+}
+
+model AISettings {
+  id            String      @id @default(cuid())
+  provider      AIProvider  @default(LM_STUDIO)
+  lmStudioUrl   String
+  apiKey       String
+  defaultModel String
+  temperature   Float       @default(0.2)
+  maxTokens     Int         @default(2000)
+  topP          Float       @default(0.9)
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  @@unique([provider])
+}

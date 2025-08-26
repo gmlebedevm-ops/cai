@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/lib/db'
+import { AIProvider } from '@prisma/client'
 
 interface AISettings {
   id: string
@@ -11,20 +13,6 @@ interface AISettings {
   topP: number
   isActive: boolean
   updatedAt: string
-}
-
-// Временное хранилище настроек (в реальном приложении нужно использовать базу данных)
-let aiSettings: AISettings = {
-  id: 'default',
-  provider: 'lm-studio',
-  lmStudioUrl: process.env.LM_STUDIO_URL || 'http://localhost:1234',
-  apiKey: process.env.LM_STUDIO_API_KEY || 'lm-studio',
-  defaultModel: process.env.LM_STUDIO_DEFAULT_MODEL || 'TheBloke/Mistral-7B-Instruct-v0.2-GGUF', // Модель по умолчанию
-  temperature: 0.2,
-  maxTokens: 2000,
-  topP: 0.9,
-  isActive: true,
-  updatedAt: new Date().toISOString()
 }
 
 // Конфигурация URL для разных провайдеров
@@ -65,9 +53,73 @@ let performanceStats: PerformanceStats = {
   modelUsage: {}
 }
 
+// Функция для преобразования строкового значения провайдера в enum
+function stringToProvider(provider: string): AIProvider {
+  switch (provider.toLowerCase()) {
+    case 'lm-studio':
+      return AIProvider.LM_STUDIO
+    case 'z-ai':
+      return AIProvider.Z_AI
+    case 'openai':
+      return AIProvider.OPENAI
+    case 'anthropic':
+      return AIProvider.ANTHROPIC
+    default:
+      return AIProvider.LM_STUDIO // значение по умолчанию
+  }
+}
+
+// Функция для получения или создания настроек AI
+async function getOrCreateAISettings() {
+  try {
+    // Сначала пытаемся получить существующие настройки
+    let settings = await db.aISettings.findFirst()
+    
+    if (!settings) {
+      // Если настроек нет, создаем их с значениями по умолчанию из .env
+      settings = await db.aISettings.create({
+        data: {
+          provider: AIProvider.LM_STUDIO,
+          lmStudioUrl: process.env.LM_STUDIO_URL || 'http://localhost:1234',
+          apiKey: process.env.LM_STUDIO_API_KEY || 'lm-studio',
+          defaultModel: process.env.LM_STUDIO_DEFAULT_MODEL || 'TheBloke/Mistral-7B-Instruct-v0.2-GGUF',
+          temperature: 0.2,
+          maxTokens: 2000,
+          topP: 0.9,
+          isActive: true
+        }
+      })
+    }
+    
+    return settings
+  } catch (error) {
+    console.error('Error getting/creating AI settings:', error)
+    throw error
+  }
+}
+
+// Функция для преобразования настроек из базы данных в формат API
+function formatAISettings(dbSettings: any): AISettings {
+  return {
+    id: dbSettings.id,
+    provider: dbSettings.provider.toLowerCase() as any,
+    lmStudioUrl: dbSettings.lmStudioUrl,
+    apiKey: dbSettings.apiKey,
+    defaultModel: dbSettings.defaultModel,
+    temperature: dbSettings.temperature,
+    maxTokens: dbSettings.maxTokens,
+    topP: dbSettings.topP,
+    isActive: dbSettings.isActive,
+    updatedAt: dbSettings.updatedAt.toISOString()
+  }
+}
+
 export async function GET() {
   try {
-    return NextResponse.json(aiSettings)
+    const dbSettings = await getOrCreateAISettings()
+    const settings = formatAISettings(dbSettings)
+    
+    return NextResponse.json(settings)
   } catch (error) {
     console.error('Error fetching AI settings:', error)
     return NextResponse.json(
@@ -122,23 +174,28 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    // Обновление настроек
-    aiSettings = {
-      ...aiSettings,
-      provider,
-      lmStudioUrl: provider === 'lm-studio' ? lmStudioUrl : (PROVIDER_URLS[provider] || lmStudioUrl),
-      apiKey,
-      defaultModel,
-      temperature,
-      maxTokens,
-      topP,
-      isActive: isActive !== undefined ? isActive : aiSettings.isActive,
-      updatedAt: new Date().toISOString()
-    }
+    // Получаем текущие настройки
+    const currentSettings = await getOrCreateAISettings()
+    
+    // Обновляем настройки в базе данных
+    const updatedSettings = await db.aISettings.update({
+      where: { id: currentSettings.id },
+      data: {
+        provider: stringToProvider(provider),
+        lmStudioUrl: provider === 'lm-studio' ? lmStudioUrl : (PROVIDER_URLS[provider] || lmStudioUrl),
+        apiKey,
+        defaultModel,
+        temperature,
+        maxTokens,
+        topP,
+        isActive: isActive !== undefined ? isActive : currentSettings.isActive,
+        updatedAt: new Date()
+      }
+    })
 
-    console.log('AI settings updated:', aiSettings)
+    console.log('AI settings updated in database:', updatedSettings)
 
-    return NextResponse.json(aiSettings)
+    return NextResponse.json(formatAISettings(updatedSettings))
   } catch (error) {
     console.error('Error updating AI settings:', error)
     return NextResponse.json(
@@ -196,23 +253,28 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Обновление настроек
-      aiSettings = {
-        ...aiSettings,
-        provider,
-        lmStudioUrl,
-        apiKey,
-        defaultModel,
-        temperature,
-        maxTokens,
-        topP,
-        isActive: isActive !== undefined ? isActive : aiSettings.isActive,
-        updatedAt: new Date().toISOString()
-      }
+      // Получаем текущие настройки
+      const currentSettings = await getOrCreateAISettings()
+      
+      // Обновляем настройки в базе данных
+      const updatedSettings = await db.aISettings.update({
+        where: { id: currentSettings.id },
+        data: {
+          provider: stringToProvider(provider),
+          lmStudioUrl,
+          apiKey,
+          defaultModel,
+          temperature,
+          maxTokens,
+          topP,
+          isActive: isActive !== undefined ? isActive : currentSettings.isActive,
+          updatedAt: new Date()
+        }
+      })
 
-      console.log('AI settings updated via POST:', aiSettings)
+      console.log('AI settings updated via POST in database:', updatedSettings)
 
-      return NextResponse.json(aiSettings)
+      return NextResponse.json(formatAISettings(updatedSettings))
     }
 
     if (action === 'test_connection') {
@@ -256,10 +318,11 @@ export async function POST(request: NextRequest) {
 // Функция для тестирования подключения к AI провайдеру
 async function testConnection() {
   try {
-    console.log('Testing connection to provider:', aiSettings.provider)
+    const settings = await getOrCreateAISettings()
+    console.log('Testing connection to provider:', settings.provider)
     
     // Для Z.AI используем специальный SDK
-    if (aiSettings.provider === 'z-ai') {
+    if (settings.provider === 'Z_AI') {
       try {
         // Динамический импорт SDK (только при необходимости)
         const ZAI = await import('z-ai-web-dev-sdk')
@@ -295,7 +358,7 @@ async function testConnection() {
     }
     
     // Проверяем, что URL настроен для других провайдеров
-    if (!aiSettings.lmStudioUrl && aiSettings.provider !== 'z-ai') {
+    if (!settings.lmStudioUrl && settings.provider !== 'Z_AI') {
       return NextResponse.json({
         success: false,
         message: 'URL провайдера не настроен',
@@ -313,41 +376,41 @@ async function testConnection() {
       }
 
       // Настраиваем URL и заголовки в зависимости от провайдера
-      switch (aiSettings.provider) {
-        case 'lm-studio':
-          testUrl = `${aiSettings.lmStudioUrl}/v1/models`
-          headers['Authorization'] = `Bearer ${aiSettings.apiKey}`
+      switch (settings.provider) {
+        case 'LM_STUDIO':
+          testUrl = `${settings.lmStudioUrl}/v1/models`
+          headers['Authorization'] = `Bearer ${settings.apiKey}`
           break
-        case 'z-ai':
-          testUrl = `${aiSettings.lmStudioUrl}/v1/models`
-          headers['Authorization'] = `Bearer ${aiSettings.apiKey}`
+        case 'Z_AI':
+          testUrl = `${settings.lmStudioUrl}/v1/models`
+          headers['Authorization'] = `Bearer ${settings.apiKey}`
           break
-        case 'openai':
+        case 'OPENAI':
           testUrl = 'https://api.openai.com/v1/models'
-          headers['Authorization'] = `Bearer ${aiSettings.apiKey}`
+          headers['Authorization'] = `Bearer ${settings.apiKey}`
           break
-        case 'anthropic':
+        case 'ANTHROPIC':
           testUrl = 'https://api.anthropic.com/v1/messages'
-          headers['x-api-key'] = aiSettings.apiKey
+          headers['x-api-key'] = settings.apiKey
           headers['anthropic-version'] = '2023-06-01'
           break
         default:
           return NextResponse.json({
             success: false,
             message: 'Неизвестный провайдер',
-            error: `Unknown provider: ${aiSettings.provider}`
+            error: `Unknown provider: ${settings.provider}`
           }, { status: 400 })
       }
 
       // Для LM Studio также проверяем доступность чата
-      if (aiSettings.provider === 'lm-studio') {
+      if (settings.provider === 'LM_STUDIO') {
         try {
           // Пробуем разные варианты endpoint для чата в зависимости от версии LM Studio
           const chatEndpoints = [
-            `${aiSettings.lmStudioUrl}/v1/chat/completions`,
-            `${aiSettings.lmStudioUrl}/chat/completions`,
-            `${aiSettings.lmStudioUrl}/v1/completions`,
-            `${aiSettings.lmStudioUrl}/completions`
+            `${settings.lmStudioUrl}/v1/chat/completions`,
+            `${settings.lmStudioUrl}/chat/completions`,
+            `${settings.lmStudioUrl}/v1/completions`,
+            `${settings.lmStudioUrl}/completions`
           ]
           
           let chatSuccess = false
@@ -356,7 +419,7 @@ async function testConnection() {
           
           // Сначала проверяем базовый URL на доступность
           try {
-            const baseUrl = new URL(aiSettings.lmStudioUrl)
+            const baseUrl = new URL(settings.lmStudioUrl)
             console.log(`Testing base URL: ${baseUrl.origin}`)
             
             const baseResponse = await fetch(`${baseUrl.origin}/`, {
@@ -384,7 +447,7 @@ async function testConnection() {
                   'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                  model: aiSettings.defaultModel,
+                  model: settings.defaultModel,
                   messages: [{ role: 'user', content: 'test' }],
                   max_tokens: 1,
                   temperature: 0.1
@@ -405,7 +468,7 @@ async function testConnection() {
                 // Если 404, пробуем получить список моделей чтобы понять структуру API
                 if (chatResponse.status === 404) {
                   try {
-                    const modelsResponse = await fetch(`${aiSettings.lmStudioUrl}/v1/models`, {
+                    const modelsResponse = await fetch(`${settings.lmStudioUrl}/v1/models`, {
                       headers,
                       signal: controller.signal
                     })
@@ -463,11 +526,11 @@ async function testConnection() {
 
       if (response.ok) {
         const data = await response.json()
-        console.log('Connection successful, provider:', aiSettings.provider)
+        console.log('Connection successful, provider:', settings.provider)
         return NextResponse.json({
           success: true,
-          message: `Подключение к ${getProviderName(aiSettings.provider)} успешно установлено`,
-          provider: aiSettings.provider,
+          message: `Подключение к ${getProviderName(settings.provider)} успешно установлено`,
+          provider: settings.provider.toLowerCase(),
           models: data.data || [],
           modelCount: data.data?.length || 0
         })
@@ -488,128 +551,97 @@ async function testConnection() {
       if (fetchError.code === 'ECONNREFUSED') {
         return NextResponse.json({
           success: false,
-          message: `Не удалось подключиться к ${getProviderName(aiSettings.provider)}: соединение отклонено`,
-          error: `Сервер ${aiSettings.lmStudioUrl} недоступен`
+          message: `Не удалось подключиться к ${getProviderName(settings.provider)}: соединение отклонено`,
+          error: `Сервер ${settings.lmStudioUrl} недоступен`
         }, { status: 400 })
       } else if (fetchError.code === 'ENOTFOUND') {
         return NextResponse.json({
           success: false,
-          message: `Не удалось подключиться к ${getProviderName(aiSettings.provider)}: хост не найден`,
-          error: `Хост ${new URL(aiSettings.lmStudioUrl).hostname} не найден`
+          message: `Не удалось подключиться к ${getProviderName(settings.provider)}: хост не найден`,
+          error: `Хост ${new URL(settings.lmStudioUrl).hostname} не найден`
         }, { status: 400 })
       } else if (fetchError.name === 'AbortError') {
         return NextResponse.json({
           success: false,
-          message: `Не удалось подключиться к ${getProviderName(aiSettings.provider)}: таймаут подключения`,
-          error: 'Превышено время ожидания ответа от сервера'
+          message: `Не удалось подключиться к ${getProviderName(settings.provider)}: превышено время ожидания`,
+          error: 'Connection timeout'
         }, { status: 400 })
       } else {
         return NextResponse.json({
           success: false,
-          message: `Не удалось подключиться к ${getProviderName(aiSettings.provider)}`,
-          error: fetchError.message || 'Unknown connection error'
+          message: `Не удалось подключиться к ${getProviderName(settings.provider)}: ошибка сети`,
+          error: fetchError.message || 'Network error'
         }, { status: 400 })
       }
     }
   } catch (error: any) {
-    console.error('Unexpected connection error:', error)
+    console.error('Error in testConnection:', error)
     return NextResponse.json({
       success: false,
-      message: 'Не удалось подключиться к провайдеру',
+      message: 'Ошибка при тестировании подключения',
       error: error.message || 'Unknown error'
-    }, { status: 400 })
+    }, { status: 500 })
   }
-}
-
-// Вспомогательная функция для получения названия провайдера
-function getProviderName(provider: string): string {
-  switch (provider) {
-    case 'lm-studio':
-      return 'LM Studio'
-    case 'z-ai':
-      return 'Z.AI'
-    case 'openai':
-      return 'OpenAI'
-    case 'anthropic':
-      return 'Anthropic'
-    default:
-      return 'Неизвестный провайдер'
-  }
-}
-
-// Вспомогательные функции для работы с кэшем
-function isCacheValid(): boolean {
-  if (!modelCache) return false
-  const now = Date.now()
-  return (now - modelCache.timestamp) < modelCache.ttl
-}
-
-function setCache(models: any[]): void {
-  modelCache = {
-    models,
-    timestamp: Date.now(),
-    ttl: 5 * 60 * 1000 // 5 минут
-  }
-}
-
-function getCache(): any[] | null {
-  if (!isCacheValid()) return null
-  return modelCache.models
-}
-
-function clearCache(): void {
-  modelCache = null
 }
 
 // Функция для получения доступных моделей
 async function getAvailableModels() {
   try {
-    console.log('Fetching available models for provider:', aiSettings.provider)
+    const settings = await getOrCreateAISettings()
     
-    // Для Z.AI возвращаем пустой список, так как SDK работает иначе
-    if (aiSettings.provider === 'z-ai') {
-      return NextResponse.json({
-        success: true,
-        models: [{
-          id: 'z-ai-default',
-          object: 'model',
-          created: Date.now(),
-          owned_by: 'Z.AI',
-          description: 'Z.AI модель через SDK'
-        }],
-        cached: false
-      })
-    }
-    
-    // Проверяем, что URL настроен для других провайдеров
-    if (!aiSettings.lmStudioUrl) {
-      return NextResponse.json({
-        success: false,
-        message: 'URL провайдера не настроен',
-        error: 'Provider URL is not configured'
-      }, { status: 400 })
-    }
-
     // Проверяем кэш
-    const cachedModels = getCache()
-    if (cachedModels) {
-      console.log('Returning cached models:', cachedModels.length)
+    if (modelCache && Date.now() - modelCache.timestamp < modelCache.ttl) {
+      console.log('Returning cached models')
       return NextResponse.json({
         success: true,
-        models: cachedModels,
+        models: modelCache.models,
         cached: true
       })
     }
 
+    // Для Z.AI возвращаем пустой список (SDK не предоставляет стандартный API для моделей)
+    if (settings.provider === 'Z_AI') {
+      return NextResponse.json({
+        success: true,
+        models: [],
+        message: 'Z.AI SDK не предоставляет список моделей стандартным образом'
+      })
+    }
+
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 секунд
+    const timeoutId = setTimeout(() => controller.abort(), 10000)
 
     try {
-      const response = await fetch(`${aiSettings.lmStudioUrl}/v1/models`, {
-        headers: {
-          'Authorization': `Bearer ${aiSettings.apiKey}`,
-          'Content-Type': 'application/json'
-        },
+      let modelsUrl: string
+      let headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      }
+
+      switch (settings.provider) {
+        case 'LM_STUDIO':
+          modelsUrl = `${settings.lmStudioUrl}/v1/models`
+          headers['Authorization'] = `Bearer ${settings.apiKey}`
+          break
+        case 'OPENAI':
+          modelsUrl = 'https://api.openai.com/v1/models'
+          headers['Authorization'] = `Bearer ${settings.apiKey}`
+          break
+        case 'ANTHROPIC':
+          // Для Anthropic используем специальный endpoint
+          modelsUrl = 'https://api.anthropic.com/v1/messages'
+          headers['x-api-key'] = settings.apiKey
+          headers['anthropic-version'] = '2023-06-01'
+          break
+        default:
+          return NextResponse.json({
+            success: false,
+            message: 'Неизвестный провайдер для получения моделей',
+            error: `Unknown provider: ${settings.provider}`
+          }, { status: 400 })
+      }
+
+      const response = await fetch(modelsUrl, {
+        headers,
         signal: controller.signal
       })
 
@@ -617,92 +649,61 @@ async function getAvailableModels() {
 
       if (response.ok) {
         const data = await response.json()
-        console.log('Models fetched successfully:', data.data?.length || 0)
         
-        // Обогащаем модели дополнительной информацией
-        const enrichedModels = (data.data || []).map((model: any) => ({
-          ...model,
-          size: estimateModelSize(model.id),
-          format: getModelFormat(model.id),
-          family: getModelFamily(model.id),
-          quantization: getQuantizationLevel(model.id),
-          description: generateModelDescription(model.id),
-          is_favorite: false,
-          is_tested: false
-        }))
-        
-        // Сохраняем в кэш
-        setCache(enrichedModels)
-        
+        // Кэшируем результат
+        modelCache = {
+          models: data.data || [],
+          timestamp: Date.now(),
+          ttl: 5 * 60 * 1000 // 5 минут
+        }
+
+        console.log('Models fetched successfully:', data.data?.length || 0, 'models')
         return NextResponse.json({
           success: true,
-          models: enrichedModels,
+          models: data.data || [],
           cached: false
         })
       } else {
         const errorText = await response.text()
-        console.error('Failed to fetch models:', response.status, response.statusText, errorText)
+        console.error('Failed to fetch models:', response.status, errorText)
         return NextResponse.json({
           success: false,
           message: 'Не удалось получить список моделей',
-          error: `${response.status} ${response.statusText}`
+          error: errorText
         }, { status: 400 })
       }
     } catch (fetchError: any) {
       clearTimeout(timeoutId)
-      console.error('Fetch models error:', fetchError)
-      
-      // Обрабатываем конкретные ошибки подключения
-      if (fetchError.code === 'ECONNREFUSED') {
-        return NextResponse.json({
-          success: false,
-          message: 'Не удалось получить модели: соединение отклонено',
-          error: `Сервер ${aiSettings.lmStudioUrl} недоступен`
-        }, { status: 400 })
-      } else if (fetchError.code === 'ENOTFOUND') {
-        return NextResponse.json({
-          success: false,
-          message: 'Не удалось получить модели: хост не найден',
-          error: `Хост ${new URL(aiSettings.lmStudioUrl).hostname} не найден`
-        }, { status: 400 })
-      } else if (fetchError.name === 'AbortError') {
-        return NextResponse.json({
-          success: false,
-          message: 'Не удалось получить модели: таймаут подключения',
-          error: 'Превышено время ожидания ответа от сервера'
-        }, { status: 400 })
-      } else {
-        return NextResponse.json({
-          success: false,
-          message: 'Не удалось получить модели',
-          error: fetchError.message || 'Unknown connection error'
-        }, { status: 400 })
-      }
+      console.error('Error fetching models:', fetchError)
+      return NextResponse.json({
+        success: false,
+        message: 'Ошибка при получении списка моделей',
+        error: fetchError.message || 'Network error'
+      }, { status: 400 })
     }
   } catch (error: any) {
-    console.error('Error fetching models:', error)
+    console.error('Error in getAvailableModels:', error)
     return NextResponse.json({
       success: false,
-      message: 'Ошибка при получении моделей',
+      message: 'Ошибка при получении списка моделей',
       error: error.message || 'Unknown error'
-    }, { status: 400 })
+    }, { status: 500 })
   }
 }
 
 // Функция для тестирования конкретной модели
-async function testModel(modelId: string, testPrompt: string) {
+async function testModel(modelId: string, testPrompt?: string) {
   try {
-    console.log('Testing model:', modelId, 'Provider:', aiSettings.provider)
+    const settings = await getOrCreateAISettings()
     
     // Для Z.AI используем SDK
-    if (aiSettings.provider === 'z-ai') {
+    if (settings.provider === 'Z_AI') {
       try {
         const ZAI = await import('z-ai-web-dev-sdk')
         const zai = await ZAI.default.create()
         
         const startTime = Date.now()
-        
-        const completion = await zai.chat.completions.create({
+        const result = await zai.chat.completions.create({
           messages: [
             {
               role: 'user',
@@ -710,293 +711,190 @@ async function testModel(modelId: string, testPrompt: string) {
             }
           ],
           max_tokens: 100,
-          temperature: 0.7
+          temperature: settings.temperature
         })
         
         const responseTime = Date.now() - startTime
-        const messageContent = completion.choices[0]?.message?.content || ''
-        
-        console.log('Z.AI model test successful:', { responseTime, contentLength: messageContent.length })
         
         return NextResponse.json({
           success: true,
-          message: 'Тест модели Z.AI пройден успешно',
+          message: 'Модель Z.AI успешно протестирована',
+          response: result.choices[0]?.message?.content || '',
           response_time: responseTime,
-          quality_score: messageContent.length > 10 ? 0.8 : 0.5, // Простая оценка качества
-          content: messageContent
+          model: modelId
         })
       } catch (sdkError: any) {
         console.error('Z.AI model test error:', sdkError)
         return NextResponse.json({
           success: false,
-          message: 'Тест модели Z.AI не удался',
+          message: 'Не удалось протестировать модель Z.AI',
           error: sdkError.message || 'Z.AI SDK error'
         }, { status: 400 })
       }
     }
-    
-    // Проверяем, что URL настроен для других провайдеров
-    if (!aiSettings.lmStudioUrl) {
-      return NextResponse.json({
-        success: false,
-        message: 'URL провайдера не настроен',
-        error: 'Provider URL is not configured'
-      }, { status: 400 })
-    }
 
-    const startTime = Date.now()
-    
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 секунд для теста модели
 
     try {
-      // Пробуем разные варианты endpoint для тестирования модели
-      const chatEndpoints = [
-        `${aiSettings.lmStudioUrl}/v1/chat/completions`,
-        `${aiSettings.lmStudioUrl}/chat/completions`
-      ]
+      let chatUrl: string
+      let headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      }
+
+      switch (settings.provider) {
+        case 'LM_STUDIO':
+          chatUrl = `${settings.lmStudioUrl}/v1/chat/completions`
+          headers['Authorization'] = `Bearer ${settings.apiKey}`
+          break
+        case 'OPENAI':
+          chatUrl = 'https://api.openai.com/v1/chat/completions'
+          headers['Authorization'] = `Bearer ${settings.apiKey}`
+          break
+        case 'ANTHROPIC':
+          chatUrl = 'https://api.anthropic.com/v1/messages'
+          headers['x-api-key'] = settings.apiKey
+          headers['anthropic-version'] = '2023-06-01'
+          break
+        default:
+          return NextResponse.json({
+            success: false,
+            message: 'Неизвестный провайдер для теста модели',
+            error: `Unknown provider: ${settings.provider}`
+          }, { status: 400 })
+      }
+
+      const startTime = Date.now()
       
-      let response = null
-      let workingEndpoint = null
-      
-      for (const endpoint of chatEndpoints) {
-        try {
-          response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${aiSettings.apiKey}`
-            },
-            body: JSON.stringify({
-              model: modelId,
-              messages: [
-                {
-                  role: 'user',
-                  content: testPrompt || 'Привет! Пожалуйста, представься кратко.'
-                }
-              ],
-              temperature: 0.7,
-              max_tokens: 100,
-              stream: false
-            }),
-            signal: controller.signal
-          })
-          
-          if (response.ok) {
-            workingEndpoint = endpoint
-            console.log(`LM Studio model test successful with endpoint: ${endpoint}`)
-            break
-          } else {
-            console.warn(`LM Studio model test failed with endpoint: ${endpoint} - ${response.status}`)
-          }
-        } catch (endpointError: any) {
-          console.warn(`LM Studio model test endpoint error: ${endpoint} - ${endpointError.message}`)
+      let body: any
+      if (settings.provider === 'ANTHROPIC') {
+        body = {
+          model: modelId,
+          max_tokens: 100,
+          temperature: settings.temperature,
+          messages: [
+            {
+              role: 'user',
+              content: testPrompt || 'Привет! Пожалуйста, представься кратко.'
+            }
+          ]
+        }
+      } else {
+        body = {
+          model: modelId,
+          messages: [
+            {
+              role: 'user',
+              content: testPrompt || 'Привет! Пожалуйста, представься кратко.'
+            }
+          ],
+          max_tokens: 100,
+          temperature: settings.temperature
         }
       }
-      
-      if (!response || !response.ok) {
-        throw new Error(`Не удалось найти работающий endpoint для модели ${modelId}`)
-      }
+
+      const response = await fetch(chatUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal
+      })
 
       clearTimeout(timeoutId)
       const responseTime = Date.now() - startTime
 
       if (response.ok) {
         const data = await response.json()
-        const responseText = data.choices[0]?.message?.content || ''
-        console.log('Model test successful:', modelId, 'Response time:', responseTime + 'ms')
-        
-        // Оцениваем качество ответа
-        const qualityScore = assessResponseQuality(responseText)
-        
-        // Обновляем статистику производительности
-        updatePerformanceStats(modelId, responseTime, true)
-        
+        const responseText = settings.provider === 'ANTHROPIC' 
+          ? data.content[0]?.text || ''
+          : data.choices[0]?.message?.content || ''
+
+        console.log('Model test successful:', modelId, responseTime + 'ms')
         return NextResponse.json({
           success: true,
-          message: 'Тест модели успешно выполнен',
+          message: 'Модель успешно протестирована',
+          response: responseText,
           response_time: responseTime,
-          quality_score: qualityScore,
-          response_text: responseText
+          model: modelId
         })
       } else {
         const errorText = await response.text()
-        console.error('Model test failed:', modelId, 'Status:', response.status, 'Error:', errorText)
-        
-        // Обновляем статистику производительности (неудачный запрос)
-        updatePerformanceStats(modelId, responseTime, false)
-        
+        console.error('Model test failed:', response.status, errorText)
         return NextResponse.json({
           success: false,
-          message: `Ошибка тестирования модели: ${response.status} ${response.statusText}`,
-          response_time: responseTime,
-          quality_score: 0,
+          message: 'Не удалось протестировать модель',
           error: errorText
         }, { status: 400 })
       }
     } catch (fetchError: any) {
       clearTimeout(timeoutId)
-      const responseTime = Date.now() - startTime
-      console.error('Model test fetch error:', modelId, fetchError)
-      
-      // Обновляем статистику производительности (неудачный запрос)
-      updatePerformanceStats(modelId, responseTime, false)
-      
-      // Обрабатываем конкретные ошибки подключения
-      if (fetchError.code === 'ECONNREFUSED') {
-        return NextResponse.json({
-          success: false,
-          message: 'Не удалось протестировать модель: соединение отклонено',
-          response_time: responseTime,
-          quality_score: 0,
-          error: `Сервер ${aiSettings.lmStudioUrl} недоступен`
-        }, { status: 400 })
-      } else if (fetchError.code === 'ENOTFOUND') {
-        return NextResponse.json({
-          success: false,
-          message: 'Не удалось протестировать модель: хост не найден',
-          response_time: responseTime,
-          quality_score: 0,
-          error: `Хост ${new URL(aiSettings.lmStudioUrl).hostname} не найден`
-        }, { status: 400 })
-      } else if (fetchError.name === 'AbortError') {
-        return NextResponse.json({
-          success: false,
-          message: 'Не удалось протестировать модель: таймаут подключения',
-          response_time: responseTime,
-          quality_score: 0,
-          error: 'Превышено время ожидания ответа от сервера'
-        }, { status: 400 })
-      } else {
-        return NextResponse.json({
-          success: false,
-          message: 'Не удалось протестировать модель',
-          response_time: responseTime,
-          quality_score: 0,
-          error: fetchError.message || 'Unknown connection error'
-        }, { status: 400 })
-      }
+      console.error('Error testing model:', fetchError)
+      return NextResponse.json({
+        success: false,
+        message: 'Ошибка при тестировании модели',
+        error: fetchError.message || 'Network error'
+      }, { status: 400 })
     }
   } catch (error: any) {
-    console.error('Error testing model:', modelId, error)
+    console.error('Error in testModel:', error)
     return NextResponse.json({
       success: false,
-      message: 'Не удалось протестировать модель',
-      response_time: 0,
-      quality_score: 0,
+      message: 'Ошибка при тестировании модели',
       error: error.message || 'Unknown error'
-    }, { status: 400 })
+    }, { status: 500 })
   }
 }
 
-// Вспомогательные функции для анализа моделей
-function estimateModelSize(modelId: string): string {
-  if (modelId.includes('7B')) return '7B'
-  if (modelId.includes('13B')) return '13B'
-  if (modelId.includes('34B')) return '34B'
-  if (modelId.includes('70B')) return '70B'
-  return 'Unknown'
+// Функция для очистки кэша
+function clearCache() {
+  modelCache = null
+  console.log('Model cache cleared')
 }
 
-function getModelFormat(modelId: string): string {
-  if (modelId.includes('GGUF')) return 'GGUF'
-  if (modelId.includes('GGML')) return 'GGML'
-  if (modelId.includes('GPTQ')) return 'GPTQ'
-  return 'Unknown'
-}
-
-function getModelFamily(modelId: string): string {
-  if (modelId.includes('Mistral')) return 'Mistral'
-  if (modelId.includes('Llama')) return 'Llama'
-  if (modelId.includes('Vicuna')) return 'Vicuna'
-  if (modelId.includes('Alpaca')) return 'Alpaca'
-  return 'Unknown'
-}
-
-function getQuantizationLevel(modelId: string): string {
-  if (modelId.includes('Q4')) return 'Q4'
-  if (modelId.includes('Q5')) return 'Q5'
-  if (modelId.includes('Q8')) return 'Q8'
-  return 'Unknown'
-}
-
-function generateModelDescription(modelId: string): string {
-  if (modelId.includes('Instruct')) return 'Инструкционная модель, оптимизированная для следования командам'
-  if (modelId.includes('Chat')) return 'Чат-модель, оптимизированная для диалогов'
-  if (modelId.includes('Code')) return 'Модель, специализированная на генерации кода'
-  return 'Универсальная языковая модель'
-}
-
-function assessResponseQuality(response: string): number {
-  // Простая оценка качества на основе длины и содержательности ответа
-  if (!response || response.length < 10) return 1
-  if (response.length < 50) return 3
-  if (response.includes('Привет') || response.includes('Здравствуйте')) return 7
-  if (response.length > 100) return 8
-  return 5
-}
-
-// Функции для отслеживания производительности
-function updatePerformanceStats(modelId: string, responseTime: number, success: boolean): void {
-  performanceStats.totalRequests++
-  performanceStats.totalResponseTime += responseTime
-  
-  if (success) {
-    performanceStats.successfulRequests++
-  } else {
-    performanceStats.failedRequests++
-  }
-  
-  performanceStats.lastRequestTime = Date.now()
-  
-  // Обновляем статистику по моделям
-  performanceStats.modelUsage[modelId] = (performanceStats.modelUsage[modelId] || 0) + 1
-  
-  // Очищаем старые запросы (старше 24 часов)
-  cleanupOldRequests()
-}
-
-function cleanupOldRequests(): void {
-  const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000
-  // В реальном приложении здесь нужно хранить историю запросов с временными метками
-  // Для простоты просто уменьшаем счетчик
-  if (performanceStats.lastRequestTime && performanceStats.lastRequestTime < twentyFourHoursAgo) {
-    performanceStats.requestsLast24h = Math.max(0, performanceStats.requestsLast24h - 1)
-  }
-}
-
-async function getPerformanceStats(): Promise<NextResponse> {
+// Функция для получения статистики производительности
+async function getPerformanceStats() {
   try {
-    const avgResponseTime = performanceStats.totalRequests > 0 
-      ? Math.round(performanceStats.totalResponseTime / performanceStats.totalRequests)
-      : 0
+    // В реальном приложении здесь может быть более сложная логика
+    // Например, получение статистики из базы данных или Redis
     
-    const successRate = performanceStats.totalRequests > 0
-      ? Math.round((performanceStats.successfulRequests / performanceStats.totalRequests) * 100)
-      : 100
-
-    // Сортируем модели по использованию
-    const topModels = Object.entries(performanceStats.modelUsage)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5)
-      .map(([modelId, usage]) => ({ modelId, usage }))
-
     return NextResponse.json({
       success: true,
       stats: {
         totalRequests: performanceStats.totalRequests,
-        avgResponseTime,
-        successRate,
+        successfulRequests: performanceStats.successfulRequests,
+        failedRequests: performanceStats.failedRequests,
+        avgResponseTime: performanceStats.totalRequests > 0 
+          ? Math.round(performanceStats.totalResponseTime / performanceStats.totalRequests) 
+          : 0,
+        successRate: performanceStats.totalRequests > 0 
+          ? Math.round((performanceStats.successfulRequests / performanceStats.totalRequests) * 100) 
+          : 100,
         requestsLast24h: performanceStats.requestsLast24h,
-        topModels,
-        lastRequestTime: performanceStats.lastRequestTime
+        modelUsage: performanceStats.modelUsage
       }
     })
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Error getting performance stats:', error)
     return NextResponse.json({
       success: false,
-      message: 'Ошибка при получении статистики',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      message: 'Ошибка при получении статистики производительности',
+      error: error.message || 'Unknown error'
     }, { status: 500 })
+  }
+}
+
+// Вспомогательная функция для получения названия провайдера
+function getProviderName(provider: string): string {
+  switch (provider) {
+    case 'LM_STUDIO':
+      return 'LM Studio'
+    case 'Z_AI':
+      return 'Z.AI'
+    case 'OPENAI':
+      return 'OpenAI'
+    case 'ANTHROPIC':
+      return 'Anthropic'
+    default:
+      return 'AI-провайдер'
   }
 }

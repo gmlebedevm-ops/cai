@@ -199,9 +199,14 @@ export default function AISettingsPage() {
       if (response.ok) {
         const data = await response.json()
         setSettings(data)
+      } else {
+        const error = await response.json()
+        console.error('API Error:', error)
+        alert(`Ошибка загрузки настроек: ${error.error || 'Неизвестная ошибка'}`)
       }
     } catch (error) {
       console.error('Error fetching AI settings:', error)
+      alert('Ошибка при загрузке настроек AI. Проверьте консоль для деталей.')
     } finally {
       setLoading(false)
     }
