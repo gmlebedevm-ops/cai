@@ -17,9 +17,9 @@ interface AISettings {
 let aiSettings: AISettings = {
   id: 'default',
   provider: 'lm-studio',
-  lmStudioUrl: 'http://192.168.2.5:11234',
-  apiKey: 'lm-studio',
-  defaultModel: 'TheBloke/Mistral-7B-Instruct-v0.2-GGUF', // Модель по умолчанию
+  lmStudioUrl: process.env.LM_STUDIO_URL || 'http://localhost:1234',
+  apiKey: process.env.LM_STUDIO_API_KEY || 'lm-studio',
+  defaultModel: process.env.LM_STUDIO_DEFAULT_MODEL || 'TheBloke/Mistral-7B-Instruct-v0.2-GGUF', // Модель по умолчанию
   temperature: 0.2,
   maxTokens: 2000,
   topP: 0.9,
@@ -342,33 +342,114 @@ async function testConnection() {
       // Для LM Studio также проверяем доступность чата
       if (aiSettings.provider === 'lm-studio') {
         try {
-          const chatTestUrl = `${aiSettings.lmStudioUrl}/v1/chat/completions`
-          const chatResponse = await fetch(chatTestUrl, {
-            method: 'POST',
-            headers: {
-              ...headers,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              model: aiSettings.defaultModel,
-              messages: [{ role: 'user', content: 'test' }],
-              max_tokens: 1
-            }),
-            signal: controller.signal
-          })
+          // Пробуем разные варианты endpoint для чата в зависимости от версии LM Studio
+          const chatEndpoints = [
+            `${aiSettings.lmStudioUrl}/v1/chat/completions`,
+            `${aiSettings.lmStudioUrl}/chat/completions`,
+            `${aiSettings.lmStudioUrl}/v1/completions`,
+            `${aiSettings.lmStudioUrl}/completions`
+          ]
           
-          if (!chatResponse.ok) {
+          let chatSuccess = false
+          let lastError = null
+          let workingEndpoint = null
+          
+          // Сначала проверяем базовый URL на доступность
+          try {
+            const baseUrl = new URL(aiSettings.lmStudioUrl)
+            console.log(`Testing base URL: ${baseUrl.origin}`)
+            
+            const baseResponse = await fetch(`${baseUrl.origin}/`, {
+              method: 'GET',
+              signal: controller.signal,
+              timeout: 5000
+            })
+            
+            if (baseResponse.ok) {
+              console.log('LM Studio base URL is accessible')
+            }
+          } catch (baseError) {
+            console.warn('LM Studio base URL not accessible:', baseError)
+          }
+          
+          // Проверяем каждый endpoint чата
+          for (const chatEndpoint of chatEndpoints) {
+            try {
+              console.log(`Testing LM Studio chat endpoint: ${chatEndpoint}`)
+              
+              const chatResponse = await fetch(chatEndpoint, {
+                method: 'POST',
+                headers: {
+                  ...headers,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  model: aiSettings.defaultModel,
+                  messages: [{ role: 'user', content: 'test' }],
+                  max_tokens: 1,
+                  temperature: 0.1
+                }),
+                signal: controller.signal
+              })
+              
+              if (chatResponse.ok) {
+                chatSuccess = true
+                workingEndpoint = chatEndpoint
+                console.log(`LM Studio chat endpoint working: ${chatEndpoint}`)
+                break
+              } else {
+                const errorText = await chatResponse.text()
+                lastError = `Chat endpoint ${chatEndpoint} returned ${chatResponse.status}: ${errorText}`
+                console.warn(`LM Studio chat endpoint failed: ${chatEndpoint} - ${chatResponse.status}`)
+                
+                // Если 404, пробуем получить список моделей чтобы понять структуру API
+                if (chatResponse.status === 404) {
+                  try {
+                    const modelsResponse = await fetch(`${aiSettings.lmStudioUrl}/v1/models`, {
+                      headers,
+                      signal: controller.signal
+                    })
+                    
+                    if (modelsResponse.ok) {
+                      const modelsData = await modelsResponse.json()
+                      console.log('Available models:', modelsData)
+                      lastError += ` | Available models: ${modelsData.data?.length || 0} found`
+                    }
+                  } catch (modelsError) {
+                    console.warn('Could not fetch models:', modelsError)
+                  }
+                }
+              }
+            } catch (endpointError: any) {
+              lastError = `Chat endpoint ${chatEndpoint} error: ${endpointError.message}`
+              console.warn(`LM Studio chat endpoint error: ${chatEndpoint} - ${endpointError.message}`)
+            }
+          }
+          
+          if (!chatSuccess) {
             return NextResponse.json({
               success: false,
               message: 'LM Studio доступен, но endpoint чата не работает',
-              error: `Chat endpoint returned ${chatResponse.status}`
+              error: lastError || 'All chat endpoints failed',
+              suggestion: 'Проверьте, что LM Studio запущен, модель загружена и правильность URL',
+              testedEndpoints: chatEndpoints,
+              troubleshooting: [
+                'Убедитесь, что LM Studio запущен',
+                'Проверьте, что модель загружена в LM Studio',
+                'Проверьте правильность URL и порта',
+                'Попробуйте разные варианты URL: /v1/chat/completions, /chat/completions',
+                'Проверьте, что в LM Studio включен API сервер'
+              ]
             }, { status: 400 })
+          } else {
+            console.log(`LM Studio chat endpoint verified: ${workingEndpoint}`)
           }
         } catch (chatError: any) {
           return NextResponse.json({
             success: false,
             message: 'LM Studio доступен, но endpoint чата не работает',
-            error: chatError.message || 'Chat endpoint error'
+            error: chatError.message || 'Chat endpoint test failed',
+            suggestion: 'Проверьте настройки LM Studio и сетевое подключение'
           }, { status: 400 })
         }
       }
@@ -669,26 +750,53 @@ async function testModel(modelId: string, testPrompt: string) {
     const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 секунд для теста модели
 
     try {
-      const response = await fetch(`${aiSettings.lmStudioUrl}/v1/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${aiSettings.apiKey}`
-        },
-        body: JSON.stringify({
-          model: modelId,
-          messages: [
-            {
-              role: 'user',
-              content: testPrompt || 'Привет! Пожалуйста, представься кратко.'
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 100,
-          stream: false
-        }),
-        signal: controller.signal
-      })
+      // Пробуем разные варианты endpoint для тестирования модели
+      const chatEndpoints = [
+        `${aiSettings.lmStudioUrl}/v1/chat/completions`,
+        `${aiSettings.lmStudioUrl}/chat/completions`
+      ]
+      
+      let response = null
+      let workingEndpoint = null
+      
+      for (const endpoint of chatEndpoints) {
+        try {
+          response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${aiSettings.apiKey}`
+            },
+            body: JSON.stringify({
+              model: modelId,
+              messages: [
+                {
+                  role: 'user',
+                  content: testPrompt || 'Привет! Пожалуйста, представься кратко.'
+                }
+              ],
+              temperature: 0.7,
+              max_tokens: 100,
+              stream: false
+            }),
+            signal: controller.signal
+          })
+          
+          if (response.ok) {
+            workingEndpoint = endpoint
+            console.log(`LM Studio model test successful with endpoint: ${endpoint}`)
+            break
+          } else {
+            console.warn(`LM Studio model test failed with endpoint: ${endpoint} - ${response.status}`)
+          }
+        } catch (endpointError: any) {
+          console.warn(`LM Studio model test endpoint error: ${endpoint} - ${endpointError.message}`)
+        }
+      }
+      
+      if (!response || !response.ok) {
+        throw new Error(`Не удалось найти работающий endpoint для модели ${modelId}`)
+      }
 
       clearTimeout(timeoutId)
       const responseTime = Date.now() - startTime

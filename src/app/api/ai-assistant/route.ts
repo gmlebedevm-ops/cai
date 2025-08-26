@@ -215,16 +215,29 @@ export async function POST(request: NextRequest) {
       stream: false
     }
 
-    // Определяем URL для запроса
-    const requestUrl = provider === 'lm-studio' 
-      ? `${actualBaseUrl}/v1/chat/completions`
-      : `${actualBaseUrl}/chat/completions`
+    // Определяем URL для запроса с поддержкой разных вариантов LM Studio
+    let requestUrl: string
+    let alternativeUrls: string[] = []
+    
+    if (provider === 'lm-studio') {
+      // Основной URL для LM Studio
+      requestUrl = `${actualBaseUrl}/v1/chat/completions`
+      // Альтернативные URL для разных версий LM Studio
+      alternativeUrls = [
+        `${actualBaseUrl}/chat/completions`,
+        `${actualBaseUrl}/v1/completions`,
+        `${actualBaseUrl}/completions`
+      ]
+    } else {
+      requestUrl = `${actualBaseUrl}/chat/completions`
+    }
 
     console.log('Sending request to AI provider:', {
       provider,
       url: requestUrl,
       model: requestBody.model,
-      messageCount: processedMessages.length
+      messageCount: processedMessages.length,
+      alternativeUrls: alternativeUrls
     })
 
     // Отправка запроса к AI провайдеру
@@ -246,6 +259,53 @@ export async function POST(request: NextRequest) {
         headers['x-api-key'] = actualApiKey
         headers['anthropic-version'] = '2023-06-01'
         break
+    }
+
+    // Пробуем отправить запрос, сначала по основному URL, затем по альтернативным
+    let lastError: any = null
+    const urlsToTry = [requestUrl, ...alternativeUrls]
+    
+    for (const url of urlsToTry) {
+      try {
+        console.log(`Trying URL: ${url}`)
+        
+        response = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(requestBody),
+          signal: controller.signal
+        })
+
+        if (response.ok) {
+          console.log(`Successfully connected to: ${url}`)
+          break
+        } else {
+          const errorText = await response.text()
+          lastError = {
+            url,
+            status: response.status,
+            statusText: response.statusText,
+            error: errorText
+          }
+          console.warn(`Failed to connect to ${url}: ${response.status} ${response.statusText}`)
+          
+          // Если это последний URL в списке, выбрасываем ошибку
+          if (url === urlsToTry[urlsToTry.length - 1]) {
+            throw new Error(`All endpoints failed. Last error: ${response.status} ${response.statusText} - ${errorText}`)
+          }
+        }
+      } catch (fetchError: any) {
+        lastError = {
+          url,
+          error: fetchError.message
+        }
+        console.warn(`Error connecting to ${url}: ${fetchError.message}`)
+        
+        // Если это последний URL в списке, выбрасываем ошибку
+        if (url === urlsToTry[urlsToTry.length - 1]) {
+          throw new Error(`All endpoints failed. Last error: ${fetchError.message}`)
+        }
+      }
     }
 
     try {
