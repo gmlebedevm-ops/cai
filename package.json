@@ -12,8 +12,10 @@
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:roles": "tsx prisma/seed-roles.ts",
     "db:seed:references": "tsx prisma/seed-references.ts",
-    "db:seed:workflows": "tsx prisma/seed-workflows.ts"
+    "db:seed:workflows": "tsx prisma/seed-workflows.ts",
+    "db:seed:all": "npm run db:seed:roles && npm run db:seed:references && npm run db:seed:workflows"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

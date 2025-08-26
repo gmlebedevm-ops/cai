@@ -29,7 +29,7 @@ import {
   Activity
 } from 'lucide-react'
 import { Department } from '@/types'
-import { User as UserType } from '@/types/contract'
+import { User as UserType, UserRole } from '@/types/contract'
 
 interface UserWithStats extends UserType {
   _count: {
@@ -610,7 +610,7 @@ export default function UsersPage() {
                               variant="outline"
                               size="sm"
                               onClick={() => handleDelete(user.id)}
-                              disabled={user.role === UserRole.ADMINISTRATOR}
+                              disabled={user.role === UserRole.ADMINISTRATOR || (user.userRole && user.userRole.name === 'Администратор')}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
