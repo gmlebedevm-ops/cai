@@ -98,12 +98,23 @@ export function EnhancedApprovalWorkflow({ contract, currentUserId, onApprovalUp
     startDeadlineMonitoring()
   }, [contract.id])
 
+  // Автоматическое назначение согласующих при загрузке, если их нет
+  useEffect(() => {
+    if (autoAssignEnabled && Array.isArray(approvals) && approvals.length === 0) {
+      const timer = setTimeout(() => {
+        autoAssignApprovers()
+      }, 1000) // Небольшая задержка чтобы убедиться, что все данные загружены
+      
+      return () => clearTimeout(timer)
+    }
+  }, [approvals, autoAssignEnabled, contract.id])
+
   const fetchApprovals = async () => {
     try {
       const response = await fetch(`/api/approvals?contractId=${contract.id}`)
       if (response.ok) {
         const data = await response.json()
-        setApprovals(data)
+        setApprovals(data.approvals || data) // Handle both cases: with pagination and without
       }
     } catch (error) {
       console.error('Error fetching approvals:', error)
@@ -147,22 +158,24 @@ export function EnhancedApprovalWorkflow({ contract, currentUserId, onApprovalUp
 
   const checkDeadlines = () => {
     const now = new Date()
-    approvals.forEach(approval => {
-      if (approval.status === 'PENDING' && approval.dueDate) {
-        const dueDate = new Date(approval.dueDate)
-        const daysUntilDue = differenceInDays(dueDate, now)
-        
-        // Уведомление за 1 день до дедлайна
-        if (daysUntilDue === 1) {
-          sendDeadlineNotification(approval, 'approaching')
+    if (Array.isArray(approvals)) {
+      approvals.forEach(approval => {
+        if (approval.status === 'PENDING' && approval.dueDate) {
+          const dueDate = new Date(approval.dueDate)
+          const daysUntilDue = differenceInDays(dueDate, now)
+          
+          // Уведомление за 1 день до дедлайна
+          if (daysUntilDue === 1) {
+            sendDeadlineNotification(approval, 'approaching')
+          }
+          
+          // Эскалация при просрочке
+          if (daysUntilDue < 0 && escalationEnabled) {
+            escalateApproval(approval)
+          }
         }
-        
-        // Эскалация при просрочке
-        if (daysUntilDue < 0 && escalationEnabled) {
-          escalateApproval(approval)
-        }
-      }
-    })
+      })
+    }
   }
 
   const sendDeadlineNotification = async (approval: Approval, type: 'approaching' | 'overdue') => {
@@ -295,10 +308,10 @@ export function EnhancedApprovalWorkflow({ contract, currentUserId, onApprovalUp
       description: 'Руководитель инициатора проверяет экономическую целесообразность',
       role: 'INITIATOR_MANAGER',
       duration: 2,
-      approvers: approvals.filter(a => a.workflowStep === 1),
+      approvers: Array.isArray(approvals) ? approvals.filter(a => a.workflowStep === 1) : [],
       isActive: true,
-      dueDate: approvals.find(a => a.workflowStep === 1)?.dueDate ? new Date(approvals.find(a => a.workflowStep === 1)!.dueDate!) : undefined,
-      escalated: approvals.find(a => a.workflowStep === 1)?.escalated || false
+      dueDate: Array.isArray(approvals) && approvals.find(a => a.workflowStep === 1)?.dueDate ? new Date(approvals.find(a => a.workflowStep === 1)!.dueDate!) : undefined,
+      escalated: Array.isArray(approvals) && approvals.find(a => a.workflowStep === 1)?.escalated || false
     },
     {
       id: 'finance',
@@ -306,10 +319,10 @@ export function EnhancedApprovalWorkflow({ contract, currentUserId, onApprovalUp
       description: 'Начальник ПЭО проверяет финансовые условия договора',
       role: 'DEPARTMENT_HEAD',
       duration: 3,
-      approvers: approvals.filter(a => a.workflowStep === 2),
-      isActive: approvals.filter(a => a.workflowStep === 1).every(a => a.status === 'APPROVED'),
-      dueDate: approvals.find(a => a.workflowStep === 2)?.dueDate ? new Date(approvals.find(a => a.workflowStep === 2)!.dueDate!) : undefined,
-      escalated: approvals.find(a => a.workflowStep === 2)?.escalated || false
+      approvers: Array.isArray(approvals) ? approvals.filter(a => a.workflowStep === 2) : [],
+      isActive: Array.isArray(approvals) && approvals.filter(a => a.workflowStep === 1).every(a => a.status === 'APPROVED'),
+      dueDate: Array.isArray(approvals) && approvals.find(a => a.workflowStep === 2)?.dueDate ? new Date(approvals.find(a => a.workflowStep === 2)!.dueDate!) : undefined,
+      escalated: Array.isArray(approvals) && approvals.find(a => a.workflowStep === 2)?.escalated || false
     },
     {
       id: 'legal',
@@ -317,10 +330,10 @@ export function EnhancedApprovalWorkflow({ contract, currentUserId, onApprovalUp
       description: 'Начальник юридического отдела проверяет юридические аспекты',
       role: 'DEPARTMENT_HEAD',
       duration: 3,
-      approvers: approvals.filter(a => a.workflowStep === 3),
-      isActive: approvals.filter(a => a.workflowStep === 2).every(a => a.status === 'APPROVED'),
-      dueDate: approvals.find(a => a.workflowStep === 3)?.dueDate ? new Date(approvals.find(a => a.workflowStep === 3)!.dueDate!) : undefined,
-      escalated: approvals.find(a => a.workflowStep === 3)?.escalated || false
+      approvers: Array.isArray(approvals) ? approvals.filter(a => a.workflowStep === 3) : [],
+      isActive: Array.isArray(approvals) && approvals.filter(a => a.workflowStep === 2).every(a => a.status === 'APPROVED'),
+      dueDate: Array.isArray(approvals) && approvals.find(a => a.workflowStep === 3)?.dueDate ? new Date(approvals.find(a => a.workflowStep === 3)!.dueDate!) : undefined,
+      escalated: Array.isArray(approvals) && approvals.find(a => a.workflowStep === 3)?.escalated || false
     },
     {
       id: 'chief_lawyer',
@@ -328,10 +341,10 @@ export function EnhancedApprovalWorkflow({ contract, currentUserId, onApprovalUp
       description: 'Главный юрист финальная проверка и формирование ПСР при необходимости',
       role: 'CHIEF_LAWYER',
       duration: 2,
-      approvers: approvals.filter(a => a.workflowStep === 4),
-      isActive: approvals.filter(a => a.workflowStep === 3).every(a => a.status === 'APPROVED'),
-      dueDate: approvals.find(a => a.workflowStep === 4)?.dueDate ? new Date(approvals.find(a => a.workflowStep === 4)!.dueDate!) : undefined,
-      escalated: approvals.find(a => a.workflowStep === 4)?.escalated || false
+      approvers: Array.isArray(approvals) ? approvals.filter(a => a.workflowStep === 4) : [],
+      isActive: Array.isArray(approvals) && approvals.filter(a => a.workflowStep === 3).every(a => a.status === 'APPROVED'),
+      dueDate: Array.isArray(approvals) && approvals.find(a => a.workflowStep === 4)?.dueDate ? new Date(approvals.find(a => a.workflowStep === 4)!.dueDate!) : undefined,
+      escalated: Array.isArray(approvals) && approvals.find(a => a.workflowStep === 4)?.escalated || false
     },
     {
       id: 'director',
@@ -339,10 +352,10 @@ export function EnhancedApprovalWorkflow({ contract, currentUserId, onApprovalUp
       description: 'Финальное согласование договора',
       role: 'GENERAL_DIRECTOR',
       duration: 1,
-      approvers: approvals.filter(a => a.workflowStep === 5),
-      isActive: approvals.filter(a => a.workflowStep === 4).every(a => a.status === 'APPROVED'),
-      dueDate: approvals.find(a => a.workflowStep === 5)?.dueDate ? new Date(approvals.find(a => a.workflowStep === 5)!.dueDate!) : undefined,
-      escalated: approvals.find(a => a.workflowStep === 5)?.escalated || false
+      approvers: Array.isArray(approvals) ? approvals.filter(a => a.workflowStep === 5) : [],
+      isActive: Array.isArray(approvals) && approvals.filter(a => a.workflowStep === 4).every(a => a.status === 'APPROVED'),
+      dueDate: Array.isArray(approvals) && approvals.find(a => a.workflowStep === 5)?.dueDate ? new Date(approvals.find(a => a.workflowStep === 5)!.dueDate!) : undefined,
+      escalated: Array.isArray(approvals) && approvals.find(a => a.workflowStep === 5)?.escalated || false
     }
   ]
 
@@ -631,7 +644,21 @@ export function EnhancedApprovalWorkflow({ contract, currentUserId, onApprovalUp
                 </div>
               ) : (
                 <div className="text-center py-4 text-muted-foreground">
-                  {step.isActive ? 'Ожидает назначения согласующих...' : 'Этап еще не активен'}
+                  {step.isActive ? (
+                    autoAssignEnabled ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                          <span>Автоматическое назначение согласующих...</span>
+                        </div>
+                        <p className="text-xs">
+                          Включено автоматическое назначение на основе правил маршрутизации
+                        </p>
+                      </div>
+                    ) : (
+                      'Ожидает назначения согласующих...'
+                    )
+                  ) : 'Этап еще не активен'}
                 </div>
               )}
             </CardContent>

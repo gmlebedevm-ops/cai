@@ -11,6 +11,7 @@ import { Contract, ContractStatus } from '@/types/contract'
 import { EnhancedApprovalWorkflow } from '@/components/contracts/enhanced-approval-workflow'
 import { DocumentManager } from '@/components/contracts/document-manager'
 import { ShippingManager } from '@/components/contracts/shipping-manager'
+import { CommentManager } from '@/components/contracts/comment-manager'
 import { NotificationSystem } from '@/components/notifications/notification-system'
 import AIAssistant from '@/components/ai-assistant/ai-assistant'
 
@@ -193,7 +194,7 @@ export default function ContractDetailPage() {
       {showNotifications && (
         <div className="fixed top-4 right-4 z-50">
           <NotificationSystem
-            userId="demo-user-id"
+            userId="cmeqycf4k0000ozebvt1u5lov" // Используем реальный ID пользователя
             onNotificationClick={(notification) => {
               if (notification.actionUrl) {
                 router.push(notification.actionUrl)
@@ -235,7 +236,7 @@ export default function ContractDetailPage() {
         <TabsContent value="documents" className="space-y-4">
           <DocumentManager
             contractId={contractId}
-            currentUserId="demo-user-id"
+            currentUserId="cmeqycf4k0000ozebvt1u5lov" // Используем реальный ID пользователя
             onDocumentUpdate={handleContractUpdate}
           />
         </TabsContent>
@@ -243,7 +244,7 @@ export default function ContractDetailPage() {
         <TabsContent value="approval" className="space-y-4">
           <EnhancedApprovalWorkflow
             contract={contract}
-            currentUserId="demo-user-id"
+            currentUserId="cmeqycf4k0000ozebvt1u5lov" // Используем реальный ID пользователя
             onApprovalUpdate={handleContractUpdate}
           />
         </TabsContent>
@@ -251,28 +252,25 @@ export default function ContractDetailPage() {
         <TabsContent value="shipping" className="space-y-4">
           <ShippingManager
             contract={contract}
-            currentUserId="demo-user-id"
+            currentUserId="cmeqycf4k0000ozebvt1u5lov" // Используем реальный ID пользователя
             onShippingUpdate={handleContractUpdate}
           />
         </TabsContent>
 
         <TabsContent value="comments" className="space-y-4">
-          <Card>
-            <CardContent className="text-center py-8">
-              <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-muted-foreground">Комментарии в разработке</p>
-              <p className="text-sm text-muted-foreground mt-2">
-                Здесь будет отображаться история обсуждения договора
-              </p>
-            </CardContent>
-          </Card>
+          <CommentManager
+            contractId={contractId}
+            currentUserId="cmeqycf4k0000ozebvt1u5lov" // Используем реальный ID пользователя
+            currentUserName="Иван Иванов"
+            currentUserRole="Инициатор"
+          />
         </TabsContent>
 
         <TabsContent value="ai-assistant" className="space-y-4">
           <AIAssistant
             contractId={contractId}
             contractData={contractContext}
-            userId="demo-user-id"
+            userId="cmeqycf4k0000ozebvt1u5lov" // Используем реальный ID пользователя
           />
         </TabsContent>
 
